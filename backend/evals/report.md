@@ -1,38 +1,27 @@
 # Regional plan evaluation
 
-5/6 profiles planned. Each plan is 7 days; ✓ counts are days within limits (calories ±10%, protein ≥85% of target, cost ≤110% of budget). Currency is checked against the mledoze/countries dataset; diet violations are a keyword scan of every meal.
+2/2 profiles planned. Each plan is 7 days; ✓ counts are days within limits (calories ±10%, protein ≥85% of target, cost ≤110% of budget). Currency is checked against the mledoze/countries dataset; diet violations are a keyword scan of every meal.
 
 | Profile | Model | Time | Currency | kcal ✓ | Protein ✓ (avg/target) | Budget ✓ (avg/budget) | Distinct dishes | Repetitive days | Diet violations | Regional share |
 |---|---|---|---|---|---|---|---|---|---|---|
-| Pune · vegetarian | gpt-oss-120b | 24.1s | INR ✓ | 7/7 | 5/7 (78/87 g) | 7/7 (174.86/250.0) | 23 | 0 | 0 | 74% |
-| London · tight budget | gpt-oss-120b | 12.5s | GBP ✓ | 7/7 | 7/7 (84/87 g) | 6/7 (5.28/6.3) | 24 | 0 | 0 | 89% |
-| Moscow · pescatarian | Qwen 3.8 27B | 46.0s | RUB ✓ | 7/7 | 7/7 (88/87 g) | 7/7 (564.57/700.0) | 10 | 3 | 0 | 91% |
-| Tokyo · high protein | Gemma 4 26B-A4B | 82.8s | JPY ✓ | 7/7 | 7/7 (99/106 g) | 7/7 (1101.43/1500.0) | 17 | 2 | 0 | 71% |
-| New York · vegan | Qwen 3.8 27B | 16.2s | USD ✓ | 7/7 | 5/7 (77/87 g) | 7/7 (7.33/14.0) | 20 | 0 | 1 | 68% |
-| Chennai · eggetarian, no onion/garlic | — | — | INR | error: Gemma 4 31B is overloaded right now. Try again shortly. | | | | | | |
+| Moscow · pescatarian | gpt-oss-120b | 12.6s | RUB ✓ | 7/7 | 7/7 (89/87 g) | 7/7 (286.29/700.0) | 25 | 0 | 0 | 96% |
+| Chennai · eggetarian, no onion/garlic | Gemma 4 26B-A4B | 244.8s | INR ✓ | 7/7 | 7/7 (79/87 g) | 7/7 (180.71/250.0) | 20 | 0 | 0 | 69% |
 
 ## Totals
 
-- Calories on target: 35/35 days
-- Protein on target: 31/35 days
-- Within budget: 34/35 days
-- Currency correct: 5/5
-- Diet violations: 1 meals
-- Average distinct dishes per week: 18.8
-- Average regional share: 79%
+- Calories on target: 14/14 days
+- Protein on target: 14/14 days
+- Within budget: 14/14 days
+- Currency correct: 2/2
+- Diet violations: 0 meals
+- Average distinct dishes per week: 22.5
+- Average regional share: 82%
 
 ## Diet violations found
 
-- New York · vegan: Friday Snack: 'Greek-style Tofu Yogurt' (dairy)
 
 ## Sample day (Wednesday) per profile
 
-**Pune · vegetarian**: Early Morning: Tea plain · Breakfast: Vegetable Upma (semolina) · Lunch: Rice, Masoor Dal & Lauki (bottle gourd) Sabzi with Jowar Bhakri · Snack: Buttermilk (Chaas) with a pinch of roasted cumin · Dinner: Methi Thepla with Tomato Chutney
+**Moscow · pescatarian**: Breakfast: Open rye sandwich with tvorog, cucumber & dill · Lunch: Leftover salmon & buckwheat bowl with beet‑carrot salad · Snack: Kefir with a drizzle of jam · Dinner: Fish fillet baked in pressure cooker with potatoes and dill sauce
 
-**London · tight budget**: Breakfast: Whole‑grain toast with baked beans and a poached egg · Lunch: Cheese and pickle sandwich · Snack: Tea with 2 digestive biscuits · Dinner: Shepherd’s pie (made with lean mince)
-
-**Moscow · pescatarian**: Breakfast: Oatmeal with Berries · Lunch: Borscht with Fish & Rye Bread · Snack: Kefir · Dinner: Baked Salmon with Potatoes · Drink: Black Tea
-
-**Tokyo · high protein**: Breakfast: Rice, Miso soup, and Natto · Lunch: Oyakodon (Leftover) · Snack: Boiled Egg · Dinner: Zaru Soba with Hiyayakko
-
-**New York · vegan**: Breakfast: Lentil Veggie Muffins · Lunch: Leftover Chili Salad Bowl · Snack: Carrot Sticks with Hummus · Dinner: Tofu & Broccoli Stir-fry
+**Chennai · eggetarian, no onion/garlic**: Early Morning: Filter coffee · Breakfast: Ragi Upma with vegetables · Lunch: Rice with Rasam and Moong Dal Poriyal · Snack: Boiled egg · Dinner: Egg Dosa with chutney

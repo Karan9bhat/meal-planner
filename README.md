@@ -91,6 +91,7 @@ cd backend
 - `frontend/src/app/`: routes: `/` home, `/plan/[step]`, `/plan/result`, `/api/agent/*`.
 
 ## Deploy
+- **Render:** `render.yaml` is a Blueprint for both services on free `*.onrender.com` URLs (custom domain steps are in its header).
 - **Backend (Render web service):** `uvicorn app.main:app --host 0.0.0.0 --port $PORT` from `backend/`;
   env: model keys, `CORS_ORIGINS=https://<frontend domain>`, `ENABLE_LOCAL_MODELS=false`.
 - **Frontend (Render or Vercel):** root `frontend/`; env: model keys (for the agents), `NEXT_PUBLIC_API_URL` and

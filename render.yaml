@@ -1,9 +1,19 @@
-# Render Blueprint: two web services from this repo.
+# Render Blueprint: two web services from this repo, on Render's free *.onrender.com addresses.
 # Secrets use `sync: false`: Render asks for their values when you apply the Blueprint; they are never stored here.
+#
+# Each service is served at https://<name>.onrender.com when that name is free on Render; otherwise Render adds a
+# suffix. After the first deploy, check both URLs in the dashboard and update API_URL / CORS_ORIGIN_REGEX below if
+# they differ.
+#
+# Custom domain later (once kilobite.tech is registered): add to the API service
+#     domains: [api.kilobite.tech]
+# and to the web service
+#     domains: [kilobite.tech, www.kilobite.tech]
+# then point NEXT_PUBLIC_API_URL / BACKEND_URL at https://api.kilobite.tech and redeploy the web service.
 services:
   # FastAPI: targets, knowledge base, region lookup, planner.
   - type: web
-    name: meal-planner-api
+    name: kilobite-planner-api
     runtime: python
     plan: free
     region: singapore
@@ -11,8 +21,6 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /api/health
-    domains:
-      - api.kilobite.tech
     envVars:
       - key: PYTHON_VERSION
         value: 3.13.3
@@ -33,22 +41,19 @@ services:
         value: "false"
       - key: CORS_ORIGINS
         value: https://kilobite.tech,https://www.kilobite.tech
-      # Also allow the frontend's own onrender.com address (replaces the localhost-only default).
+      # The web service's onrender.com address (also replaces the localhost-only default).
       - key: CORS_ORIGIN_REGEX
-        value: ^https://meal-planner-web[a-z0-9-]*\.onrender\.com$
+        value: ^https://kilobite-planner-web(-[a-z0-9]+)?\.onrender\.com$
 
   # Next.js UI + Mastra agent routes.
   - type: web
-    name: meal-planner-web
+    name: kilobite-planner-web
     runtime: node
     plan: free
     region: singapore
     rootDir: frontend
     buildCommand: npm ci && npm run build
     startCommand: npm start
-    domains:
-      - kilobite.tech
-      - www.kilobite.tech
     envVars:
       - key: NODE_VERSION
         value: 22.14.0
@@ -60,8 +65,8 @@ services:
         sync: false
       - key: SENTRY_ENVIRONMENT
         value: production
-      # Browser -> API (baked in at build time) and agent routes -> API.
+      # Browser -> API (baked in at build time, so redeploy after changing) and agent routes -> API.
       - key: NEXT_PUBLIC_API_URL
-        value: https://api.kilobite.tech
+        value: https://kilobite-planner-api.onrender.com
       - key: BACKEND_URL
-        value: https://api.kilobite.tech
+        value: https://kilobite-planner-api.onrender.com
