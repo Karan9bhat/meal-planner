@@ -65,9 +65,27 @@ def root():
     }
 
 
+# Which settings this process can see: names and true/false only, never values. Answers "did my env var arrive?".
+EXPECTED_ENV = {
+    "groq_key": ("GROQ_API_KEY", "API_KEY"),
+    "gemma_key": ("GEMINI_API_KEY", "GOOGLE_API_KEY", "GEMMA_API_KEY"),
+    "mongodb_uri": ("MONGODB_URI",),
+    "sentry_dsn": ("SENTRY_DSN",),
+}
+
+
+def _env_report() -> dict:
+    report = {k: next((n for n in names if os.getenv(n)), None) is not None for k, names in EXPECTED_ENV.items()}
+    cert = graph.CERT_PATH
+    report["mongodb_cert_file"] = os.path.isfile(cert)
+    report["service"] = os.getenv("RENDER_SERVICE_NAME", "local")
+    report["commit"] = (os.getenv("RENDER_GIT_COMMIT") or "")[:7] or None
+    return report
+
+
 @app.get("/api/health")
 def health():
-    return {"ok": True, "models": models_status(), "cuisines": len(kb.CUISINES), "graph": graph.available()}
+    return {"ok": True, "env": _env_report(), "models": models_status(), "cuisines": len(kb.CUISINES), "graph": graph.available()}
 
 
 @app.get("/api/graph/stats")
