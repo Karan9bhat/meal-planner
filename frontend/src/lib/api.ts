@@ -14,17 +14,27 @@ import type {
 // The browser calls FastAPI directly (plan generation can outlast proxy timeouts).
 // Where it lives comes from this site's own /api/config at runtime (BACKEND_URL on the web service), so moving the
 // backend never needs a rebuild. Add this site's origin to the backend's CORS settings.
-let apiBase: Promise<string> | null = null;
-
-export function getApiBase(): Promise<string> {
-  apiBase ??= fetch("/api/config")
-    .then((r) => r.json() as Promise<{ apiUrl: string }>)
-    .then((c) => c.apiUrl)
-    .catch(() => "http://localhost:8000");
-  return apiBase;
+interface ApiConfig {
+  apiUrl: string;
+  problem: string | null;
 }
 
-const api = async (path: string) => `${await getApiBase()}${path}`;
+let config: Promise<ApiConfig> | null = null;
+
+export function getApiConfig(): Promise<ApiConfig> {
+  config ??= fetch("/api/config")
+    .then((r) => r.json() as Promise<ApiConfig>)
+    .catch(() => ({ apiUrl: "http://localhost:8000", problem: null }));
+  return config;
+}
+
+export const getApiBase = async () => (await getApiConfig()).apiUrl;
+
+const api = async (path: string) => {
+  const c = await getApiConfig();
+  if (c.problem) throw new Error(c.problem);
+  return `${c.apiUrl}${path}`;
+};
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
