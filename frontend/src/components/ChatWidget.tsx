@@ -213,7 +213,7 @@ function SwapCard({ output }: { output: SwapOutput }) {
   const [applied, setApplied] = useState(false);
   if (!output?.ok || !output.swap) return <p className="text-xs text-chili">{output?.error ?? "Couldn't propose that swap."}</p>;
   const s = output.swap;
-  const sym = result?.currency_symbol ?? "";
+  const cur = { code: result?.currency_code, symbol: result?.currency_symbol };
   return (
     <div className="w-[88%] rounded-2xl border border-leaf/40 bg-leaf-soft/50 p-3 text-sm">
       <p className="text-[11px] font-semibold uppercase tracking-wide text-leaf">
@@ -223,7 +223,7 @@ function SwapCard({ output }: { output: SwapOutput }) {
       <p className="font-semibold">{s.dish}</p>
       <p className="text-muted">{s.portion}</p>
       <p className="mt-1 text-xs tabular-nums text-muted">
-        {Math.round(s.kcal)} kcal · P {Math.round(s.protein_g)}g · {money(s.cost, sym)} · day total {output.day_kcal_before} → {output.day_kcal_after} kcal
+        {Math.round(s.kcal)} kcal · P {Math.round(s.protein_g)}g · {money(s.cost, cur)} · day total {output.day_kcal_before} → {output.day_kcal_after} kcal
         (target {output.target_kcal})
       </p>
       {s.reason && <p className="mt-1 text-xs">{s.reason}</p>}

@@ -1,5 +1,6 @@
 import { handleChatStream } from "@mastra/ai-sdk";
 import { RequestContext } from "@mastra/core/request-context";
+import * as Sentry from "@sentry/node";
 import { createUIMessageStreamResponse, type UIMessage } from "ai";
 import type { PlanResponse, Profile, Targets } from "@/lib/types";
 import { mastra } from "@/mastra";
@@ -30,7 +31,10 @@ export async function POST(req: Request) {
     version: "v7",
     // Keep the last few turns: enough context, small enough for free-tier token limits.
     params: { messages: messages.slice(-12), requestContext, maxSteps: 5 },
-    onError: () => "The assistant is busy right now. Please try again in a moment.",
+    onError: (e) => {
+      Sentry.captureException(e, { tags: { agent: "chat" } });
+      return "The assistant is busy right now. Please try again in a moment.";
+    },
     messageMetadata: ({ part }) => (part.type === "start" ? { model: decision.labels[0], route_reason: decision.reason } : undefined),
   });
   return createUIMessageStreamResponse({ stream });

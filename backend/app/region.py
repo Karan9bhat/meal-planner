@@ -16,6 +16,7 @@ from pydantic import BaseModel, ValidationError
 
 from . import kb
 from .config import route
+from .observability import agent_span
 from .llm import LLMError, chat_json
 from .schemas import RegionRef
 
@@ -44,19 +45,26 @@ def _ref(p: kb.CuisineProfile, place: str, country: str = "") -> RegionRef:
         country=country or p.region,
         currency_code=p.currency.code,
         currency_symbol=p.currency.symbol,
+        budget=p.daily_budget.model_dump(),
     )
+
+
+def _budget_around(typical: float) -> dict[str, float]:
+    return {"low": round(typical * 0.6, 2), "typical": round(typical, 2), "high": round(typical * 1.8, 2)}
 
 
 def _resolution(ref: RegionRef, source: str, reason: str = "") -> Resolution:
     p = kb.CUISINES.get(ref.key)
     status = "ready" if p else _status.get(ref.key, "failed")
+    # The place's own budget wins; a profile's budget only counts when it's in the same currency.
+    budget = ref.budget or (p.daily_budget.model_dump() if p and p.currency.code == ref.currency_code else {})
     return Resolution(
-        region=ref,
+        region=ref.model_copy(update={"budget": budget}),
         status=status,
         source=source,
         staples=p.staples if p else [],
         meal_times=p.meal_times if p else {},
-        budget=p.daily_budget.model_dump() if p else {},
+        budget=budget,
         route_reason=reason,
     )
 
@@ -86,6 +94,7 @@ Known cuisine profiles:
 Return JSON:
 {{"place": "tidy place name, e.g. 'Lyon, France'", "country": "country in English",
   "currency_code": "ISO 4217", "currency_symbol": "symbol",
+  "typical_daily_food_budget": "number: typical home grocery spend per person per day there, in that currency",
   "cuisine_key": "one of the known keys if the everyday home food there is essentially that cuisine, else null",
   "new_cuisine": {{"key": "snake_case key for the local cuisine, e.g. 'polish' or 'kerala_coastal'", "name": "display name"}}}}
 If the text is not a real place, return {{"place": null}}.""",
@@ -102,6 +111,11 @@ Answer with JSON only."""
 
 
 def _generate(key: str, name: str, place: str, country: str, currency: kb.Currency) -> None:
+    with agent_span("region-knowledge-writer", **{"region.key": key, "region.place": place}):
+        _write_profile(key, name, place, country, currency)
+
+
+def _write_profile(key: str, name: str, place: str, country: str, currency: kb.Currency) -> None:
     try:
         r = route("knowledge")
         res = chat_json(
@@ -158,17 +172,26 @@ def resolve(location: str) -> Resolution:
 
     place, country = data["place"], data.get("country", "")
     currency = kb.Currency(code=data.get("currency_code") or "USD", symbol=data.get("currency_symbol") or "$")
+    try:
+        estimate = _budget_around(float(data.get("typical_daily_food_budget") or 0))
+    except (TypeError, ValueError):
+        estimate = {"typical": 0}
+    if estimate["typical"] <= 0:
+        estimate = {}
     key = data.get("cuisine_key")
     if key in kb.CUISINES:
         p = kb.CUISINES[key]
+        # e.g. Toronto -> American food but CAD prices: keep the place's currency and budget.
+        same_currency = p.currency.code == currency.code
         ref = RegionRef(key=p.key, name=p.name, place=place, country=country,
-                        currency_code=currency.code, currency_symbol=currency.symbol)
+                        currency_code=currency.code, currency_symbol=currency.symbol,
+                        budget=p.daily_budget.model_dump() if same_currency else estimate)
     else:
         new = data.get("new_cuisine") or {}
         key = re.sub(r"[^a-z0-9_]", "_", (new.get("key") or country or place).lower()).strip("_")[:40] or "local"
         name = new.get("name") or f"{country} home cooking"
         ref = RegionRef(key=key, name=name, place=place, country=country,
-                        currency_code=currency.code, currency_symbol=currency.symbol)
+                        currency_code=currency.code, currency_symbol=currency.symbol, budget=estimate)
         _start_generation(ref)
 
     kb.cache_location(location, ref.model_dump())
@@ -191,7 +214,11 @@ def profile_for(ref: RegionRef | None, wait_s: float = 90) -> kb.CuisineProfile:
     while ref.key not in kb.CUISINES and _status.get(ref.key) == "generating" and time.monotonic() < deadline:
         time.sleep(1)
     if ref.key in kb.CUISINES:
-        return kb.CUISINES[ref.key]
+        p = kb.CUISINES[ref.key]
+        # Plan in the place's currency even when its food maps to a cuisine priced elsewhere.
+        if p.currency.code != ref.currency_code:
+            p = p.model_copy(update={"currency": kb.Currency(code=ref.currency_code, symbol=ref.currency_symbol)})
+        return p
     # Generation failed or timed out: plan with the generic profile in the user's currency.
     g = kb.CUISINES["global"]
     return g.model_copy(update={"currency": kb.Currency(code=ref.currency_code, symbol=ref.currency_symbol),

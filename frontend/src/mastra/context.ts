@@ -53,7 +53,7 @@ export function profileSummary(profile: Profile, targets?: Targets | null): stri
   const b = profile.basics;
   const bg = profile.background;
   const k = profile.kitchen;
-  const cur = bg.region ? `${bg.region.currency_symbol} (${bg.region.currency_code})` : "local currency";
+  const cur = bg.region ? `${bg.region.currency_code} ${bg.region.currency_symbol}` : "";
   return [
     `- ${b.age}-year-old ${b.sex}, ${b.height_cm} cm, ${b.weight_kg} kg, target ${b.target_weight_kg} kg, ${b.activity.replace("_", " ")} activity`,
     targets ? `- Daily targets: ${targets.target_kcal} kcal, ${targets.protein_g} g protein, ${targets.carbs_g} g carbs, ${targets.fat_g} g fat` : "",
@@ -61,7 +61,7 @@ export function profileSummary(profile: Profile, targets?: Targets | null): stri
     bg.cultures.length ? `- Food culture: ${bg.cultures.join(", ")}` : "",
     `- Diet: ${bg.diet_type}${bg.diet_styles.length ? `; styles: ${bg.diet_styles.join(", ")}` : ""}`,
     `- Restrictions: ${bg.restrictions.join(", ") || "none"}; allergies: ${bg.allergies.join(", ") || "none"}; avoids: ${bg.avoid_foods.join(", ") || "nothing"}`,
-    `- Kitchen: ${k.equipment.join(", ") || "basic"}; budget ${cur}${k.daily_budget}/day; ${k.cook_minutes_per_day} min cooking/day`,
+    `- Kitchen: ${k.equipment.join(", ") || "basic"}; budget ${cur}${k.daily_budget}/day (${bg.region?.currency_code ?? "local currency"}); ${k.cook_minutes_per_day} min cooking/day`,
   ]
     .filter(Boolean)
     .join("\n");
@@ -76,7 +76,7 @@ export function planSummary(result: PlanResponse | null): string {
       .map((m) => `${m.slot}: ${m.dish} (${Math.round(m.kcal)} kcal, ${Math.round(m.protein_g)} g P)`)
       .join("; ");
     const c = result.checks.find((x) => x.day === d.day);
-    return `- ${d.day} [${c?.kcal ?? "?"} kcal, ${c?.protein_g ?? "?"} g P, ${result.currency_symbol}${c?.cost ?? "?"}]: ${meals}`;
+    return `- ${d.day} [${c?.kcal ?? "?"} kcal, ${c?.protein_g ?? "?"} g P, ${result.currency_code ?? ""} ${result.currency_symbol}${c?.cost ?? "?"}]: ${meals}`;
   });
   return [`Plan summary: ${result.plan.summary}`, ...days, `Recipes: ${result.plan.recipes.map((r) => r.name).join(", ")}`].join("\n");
 }

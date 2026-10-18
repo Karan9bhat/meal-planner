@@ -1,6 +1,7 @@
-from typing import Literal
+import re
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, BeforeValidator, Field
 
 Sex = Literal["male", "female", "other"]
 Activity = Literal["sedentary", "light", "moderate", "active", "very_active"]
@@ -46,6 +47,8 @@ class RegionRef(BaseModel):
     country: str = ""
     currency_code: str = "USD"
     currency_symbol: str = "$"
+    # Groceries per person per day in THIS place's currency: {"low", "typical", "high"}.
+    budget: dict[str, float] = {}
 
 
 class Background(BaseModel):
@@ -86,6 +89,7 @@ class Kitchen(BaseModel):
     equipment: list[str] = []
     pantry: list[str] = []
     daily_budget: float = Field(default=10, gt=0)
+    budget_currency: str = ""  # currency the budget was set in; reset when the region's currency changes
     cook_minutes_per_day: int = Field(default=45, ge=5, le=300)
     skill: Literal["beginner", "comfortable", "expert"] = "comfortable"
     batch_cooking: bool = False
@@ -99,57 +103,83 @@ class Profile(BaseModel):
 
 
 # ---------- Plan output (validated from the model's JSON) ----------
+# Models slip in small ways ("350 kcal", "₹40", recipe_id 3, null lists); coerce instead of discarding a whole plan.
+
+
+def _number(v):
+    if isinstance(v, str):
+        m = re.search(r"-?\d+(?:[.,]\d+)?", v.replace(",", ""))
+        return float(m.group().replace(",", ".")) if m else 0
+    return 0 if v is None else v
+
+
+def _opt_str(v):
+    return None if v in (None, "", "null") else str(v)
+
+
+def _str(v):
+    return "" if v is None else str(v)
+
+
+def _list(v):
+    return [] if v is None else v
+
+
+Num = Annotated[float, BeforeValidator(_number)]
+Int = Annotated[int, BeforeValidator(lambda v: int(_number(v)))]
+OptStr = Annotated[str | None, BeforeValidator(_opt_str)]
+Str = Annotated[str, BeforeValidator(_str)]
 
 class PlannedMeal(BaseModel):
-    slot: str
-    time: str = ""
-    dish: str
-    recipe_id: str | None = None
-    portion: str = ""
-    kcal: float = 0
-    protein_g: float = 0
-    carbs_g: float = 0
-    fat_g: float = 0
-    cost: float = 0  # local currency
+    slot: Str
+    time: Str = ""
+    dish: Str
+    recipe_id: OptStr = None
+    portion: Str = ""
+    kcal: Num = 0
+    protein_g: Num = 0
+    carbs_g: Num = 0
+    fat_g: Num = 0
+    cost: Num = 0  # local currency
     top_up: bool = False  # added by the deterministic balancer, not the model
 
 
 class PlanDay(BaseModel):
     day: str
-    meals: list[PlannedMeal]
-    day_total_kcal: float | None = None  # the model's own sum; we re-add it ourselves
+    meals: Annotated[list[PlannedMeal], BeforeValidator(_list)]
+    day_total_kcal: Annotated[float | None, BeforeValidator(lambda v: None if v is None else _number(v))] = None  # the model's own sum; we re-add it ourselves
 
 
 class Ingredient(BaseModel):
-    item: str
-    qty: str = ""
+    item: Str
+    qty: Str = ""
     in_pantry: bool = False
 
 
 class Recipe(BaseModel):
-    id: str
-    name: str
-    servings: int = 1
-    time_min: int = 0
-    equipment: list[str] = []
-    ingredients: list[Ingredient] = []
-    steps: list[str] = []
-    tip: str = ""
+    id: Str
+    name: Str
+    servings: Int = 1
+    time_min: Int = 0
+    equipment: Annotated[list[str], BeforeValidator(_list)] = []
+    ingredients: Annotated[list[Ingredient], BeforeValidator(_list)] = []
+    steps: Annotated[list[str], BeforeValidator(_list)] = []
+    tip: Str = ""
 
 
 class ShoppingItem(BaseModel):
-    item: str
-    qty: str = ""
-    est_cost: float = 0
-    category: str = "Other"
+    item: Str
+    qty: Str = ""
+    est_cost: Num = 0
+    category: Str = "Other"
 
 
 class Plan(BaseModel):
-    summary: str = ""
+    summary: Str = ""
     days: list[PlanDay]
-    recipes: list[Recipe] = []
-    shopping_list: list[ShoppingItem] = []
-    tips: list[str] = []
+    recipes: Annotated[list[Recipe], BeforeValidator(_list)] = []
+    shopping_list: Annotated[list[ShoppingItem], BeforeValidator(_list)] = []
+    tips: Annotated[list[str], BeforeValidator(_list)] = []
 
 
 class DayCheck(BaseModel):
@@ -168,6 +198,7 @@ class PlanResponse(BaseModel):
     checks: list[DayCheck]
     warnings: list[str] = []
     currency_symbol: str
+    currency_code: str
     model: str
     model_label: str
     provider: str

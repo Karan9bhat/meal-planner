@@ -21,6 +21,7 @@ export interface RegionRef {
   country: string;
   currency_code: string;
   currency_symbol: string;
+  budget?: { low?: number; typical?: number; high?: number }; // groceries per person per day, this currency
 }
 
 export interface RegionResolution {
@@ -67,6 +68,7 @@ export interface Kitchen {
   equipment: string[];
   pantry: string[];
   daily_budget: number;
+  budget_currency: string; // currency daily_budget was set in; reset when the region's currency changes
   cook_minutes_per_day: number;
   skill: "beginner" | "comfortable" | "expert";
   batch_cooking: boolean;
@@ -161,6 +163,7 @@ export interface PlanResponse {
   checks: DayCheck[];
   warnings: string[];
   currency_symbol: string;
+  currency_code?: string; // missing on plans saved before currency codes existed
   model: string;
   model_label: string;
   provider: string;

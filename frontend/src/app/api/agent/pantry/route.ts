@@ -1,4 +1,5 @@
 import { RequestContext } from "@mastra/core/request-context";
+import * as Sentry from "@sentry/node";
 import type { PantryResult, Profile } from "@/lib/types";
 import { mastra } from "@/mastra";
 import { pantrySchema } from "@/mastra/agents/pantry";
@@ -52,6 +53,7 @@ WHAT THEY SAY IS USUALLY IN THEIR KITCHEN
     return Response.json(body);
   } catch (e) {
     console.error("pantry agent failed", e);
+    Sentry.captureException(e, { tags: { agent: "pantry" } });
     const detail = process.env.NODE_ENV === "development" ? String(e) : undefined;
     return Response.json({ error: "The assistant couldn't read that right now. Please try again in a moment.", detail }, { status: 502 });
   }

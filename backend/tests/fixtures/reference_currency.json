@@ -1,0 +1,88 @@
+{
+  "source": "mledoze/countries \u2014 https://github.com/mledoze/countries",
+  "built": "2026-10-18",
+  "cuisine_country": {
+    "north_indian": "India",
+    "kashmiri": "India",
+    "south_indian": "India",
+    "east_indian": "India",
+    "west_indian": "India",
+    "british": "United Kingdom",
+    "french": "France",
+    "russian": "Russia",
+    "italian": "Italy",
+    "german": "Germany",
+    "american": "United States",
+    "mexican": "Mexico",
+    "chinese": "China",
+    "japanese": "Japan"
+  },
+  "currencies": {
+    "Australia": [
+      "AUD"
+    ],
+    "Brazil": [
+      "BRL"
+    ],
+    "Canada": [
+      "CAD"
+    ],
+    "Chile": [
+      "CLP"
+    ],
+    "China": [
+      "CNY"
+    ],
+    "France": [
+      "EUR"
+    ],
+    "Germany": [
+      "EUR"
+    ],
+    "India": [
+      "INR"
+    ],
+    "Italy": [
+      "EUR"
+    ],
+    "Japan": [
+      "JPY"
+    ],
+    "Kenya": [
+      "KES"
+    ],
+    "Mexico": [
+      "MXN"
+    ],
+    "Nigeria": [
+      "NGN"
+    ],
+    "Poland": [
+      "PLN"
+    ],
+    "Russia": [
+      "RUB"
+    ],
+    "South Korea": [
+      "KRW"
+    ],
+    "Spain": [
+      "EUR"
+    ],
+    "T\u00fcrkiye": [
+      "TRY"
+    ],
+    "United Arab Emirates": [
+      "AED"
+    ],
+    "United Kingdom": [
+      "GBP"
+    ],
+    "United States": [
+      "USD"
+    ],
+    "Vietnam": [
+      "VND"
+    ]
+  }
+}

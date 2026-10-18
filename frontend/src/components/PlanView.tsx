@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { money } from "@/lib/form";
+import { type Currency, money } from "@/lib/form";
 import type { PlanResponse, Recipe } from "@/lib/types";
 import { Card, cx } from "./ui";
 
@@ -19,7 +19,7 @@ export function PlanView({
   regenerating: boolean;
 }) {
   const { plan, targets: t, checks } = data;
-  const sym = data.currency_symbol;
+  const cur = { code: data.currency_code, symbol: data.currency_symbol };
   const [dayIdx, setDayIdx] = useState(0);
   const [openRecipe, setOpenRecipe] = useState<Recipe | null>(null);
   const recipes = useMemo(() => new Map(plan.recipes.map((r) => [r.id, r])), [plan.recipes]);
@@ -54,7 +54,7 @@ export function PlanView({
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Pill label="Daily calories" value={`${t.target_kcal.toLocaleString()} kcal`} />
           <Pill label="Daily protein" value={`${t.protein_g} g`} />
-          <Pill label="Food cost this week" value={money(weekCost, sym)} sub={`budget ${money(budget * 7, sym)}`} />
+          <Pill label="Food cost this week" value={money(weekCost, cur)} sub={`budget ${money(budget * 7, cur)}`} />
           <Pill
             label="Goal"
             value={t.goal === "maintain" ? "Maintain" : `${t.planned_target_weight_kg} kg`}
@@ -125,7 +125,7 @@ export function PlanView({
                           <p className="font-semibold">{m.dish.replace(/^(Top-up|Swap out):\s*/, removal ? "− " : m.top_up ? "+ " : "")}</p>
                           <p className="text-sm text-muted">{m.portion}</p>
                         </div>
-                        <span className="text-sm font-medium tabular-nums">{money(m.cost, sym)}</span>
+                        <span className="text-sm font-medium tabular-nums">{money(m.cost, cur)}</span>
                       </div>
                       <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-xs">
                         <Tag>{Math.round(m.kcal)} kcal</Tag>
@@ -154,7 +154,7 @@ export function PlanView({
               <p className="text-xs font-semibold uppercase tracking-wider text-muted">{day.day} totals</p>
               <Meter label="Calories" value={check.kcal} target={t.target_kcal} fmt={(n) => `${n.toLocaleString()} kcal`} ok={check.kcal_ok} />
               <Meter label="Protein" value={check.protein_g} target={t.protein_g} fmt={(n) => `${n} g`} ok={check.protein_ok} />
-              <Meter label="Cost" value={check.cost} target={budget} fmt={(n) => money(n, sym)} ok={check.budget_ok} />
+              <Meter label="Cost" value={check.cost} target={budget} fmt={(n) => money(n, cur)} ok={check.budget_ok} />
               <p className="text-[11px] leading-relaxed text-muted">
                 Totals are re-added by our code, not trusted from the AI. Where a day fell short, the code made small diet-safe adjustments
                 (marked in green).
@@ -183,7 +183,7 @@ export function PlanView({
             ))}
           </div>
         </Card>
-        <ShoppingList items={plan.shopping_list} total={shopCost} sym={sym} />
+        <ShoppingList items={plan.shopping_list} total={shopCost} cur={cur} />
       </div>
 
       {plan.tips.length > 0 && (
@@ -243,7 +243,7 @@ function Meter({ label, value, target, fmt, ok }: { label: string; value: number
   );
 }
 
-function ShoppingList({ items, total, sym }: { items: PlanResponse["plan"]["shopping_list"]; total: number; sym: string }) {
+function ShoppingList({ items, total, cur }: { items: PlanResponse["plan"]["shopping_list"]; total: number; cur: Currency }) {
   const [got, setGot] = useState<Set<string>>(new Set());
   const groups = useMemo(() => {
     const m = new Map<string, typeof items>();
@@ -255,7 +255,7 @@ function ShoppingList({ items, total, sym }: { items: PlanResponse["plan"]["shop
     <Card className="space-y-4">
       <div className="flex items-baseline justify-between">
         <h3 className="font-display text-2xl font-semibold">Shopping list</h3>
-        <span className="text-sm tabular-nums text-muted">≈ {money(total, sym)}</span>
+        <span className="text-sm tabular-nums text-muted">≈ {money(total, cur)}</span>
       </div>
       {items.length === 0 && <p className="text-sm text-muted">Nothing to buy — your pantry has it all.</p>}
       {groups.map(([cat, list]) => (
@@ -281,7 +281,7 @@ function ShoppingList({ items, total, sym }: { items: PlanResponse["plan"]["shop
                 <span className={cx("flex-1 text-sm", done && "text-muted line-through")}>
                   {i.item} <span className="text-muted">· {i.qty}</span>
                 </span>
-                <span className="text-xs tabular-nums text-muted">{money(i.est_cost, sym)}</span>
+                <span className="text-xs tabular-nums text-muted">{money(i.est_cost, cur)}</span>
               </label>
             );
           })}

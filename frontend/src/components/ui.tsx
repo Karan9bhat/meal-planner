@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useId } from "react";
+import { type ReactNode, useId, useState } from "react";
 
 export function cx(...c: (string | false | null | undefined)[]) {
   return c.filter(Boolean).join(" ");
@@ -258,6 +258,63 @@ export function TagInput({
           }
         }}
       />
+    </div>
+  );
+}
+
+/** Preset options as toggle chips, plus the user's own entries (stored as plain text alongside the preset keys). */
+export function ChipsWithCustom({
+  options,
+  values,
+  onChange,
+  addLabel,
+}: {
+  options: Record<string, string>;
+  values: string[];
+  onChange: (v: string[]) => void;
+  addLabel: string;
+}) {
+  const [draft, setDraft] = useState("");
+  const custom = values.filter((v) => !(v in options));
+  const add = () => {
+    const v = draft.trim().slice(0, 40);
+    const known = Object.entries(options).find(([, label]) => label.toLowerCase() === v.toLowerCase())?.[0];
+    const value = known ?? v;
+    if (value && !values.some((x) => x.toLowerCase() === value.toLowerCase())) onChange([...values, value]);
+    setDraft("");
+  };
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {Object.entries(options).map(([key, label]) => (
+        <Chip key={key} selected={values.includes(key)} onClick={() => onChange(toggleIn(values, key))}>
+          {label}
+        </Chip>
+      ))}
+      {custom.map((v) => (
+        <span key={v} className="inline-flex items-center gap-1.5 rounded-full border border-accent bg-accent px-3.5 py-1.5 text-sm text-accent-ink">
+          ✓ {v}
+          <button type="button" aria-label={`Remove ${v}`} onClick={() => onChange(values.filter((x) => x !== v))} className="opacity-80 hover:opacity-100">
+            ×
+          </button>
+        </span>
+      ))}
+      <form
+        className="inline-flex"
+        onSubmit={(e) => {
+          e.preventDefault();
+          add();
+        }}
+      >
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={() => draft.trim() && add()}
+          placeholder={`+ ${addLabel}`}
+          aria-label={addLabel}
+          maxLength={40}
+          className="w-44 rounded-full border border-dashed border-line bg-transparent px-3.5 py-1.5 text-sm outline-none placeholder:text-muted focus:border-accent"
+        />
+      </form>
     </div>
   );
 }

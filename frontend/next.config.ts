@@ -18,7 +18,7 @@ loadRootEnv();
 
 const nextConfig: NextConfig = {
   // Mastra runs only in server route handlers; keep it out of the bundler.
-  serverExternalPackages: ["@mastra/core", "@mastra/ai-sdk"],
+  serverExternalPackages: ["@mastra/core", "@mastra/ai-sdk", "@mastra/observability", "@mastra/sentry", "@sentry/node"],
 };
 
 export default nextConfig;

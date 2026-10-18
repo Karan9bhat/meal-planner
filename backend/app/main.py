@@ -1,11 +1,14 @@
 import logging
+import threading
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from . import kb, region
+from . import graph, kb, region
+from . import observability
 from .config import CORS_ORIGIN_REGEX, CORS_ORIGINS, models_status
 from .llm import LLMError
 from .nutrition import compute_targets
@@ -13,8 +16,29 @@ from .planner import generate_plan, recheck
 from .schemas import Basics, CheckRequest, DayCheck, PlanResponse, Profile, Targets
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+# Before the app is created, so Sentry's FastAPI integration instruments it.
+if observability.init():
+    logging.getLogger("mealplanner").info("Sentry tracing enabled")
 
-app = FastAPI(title="meal-planner API", version="0.2.0")
+
+def _sync_graph() -> None:
+    if graph.seed():
+        # Profiles generated while Atlas was unreachable exist only as local files: push them up (idempotent).
+        for p in list(kb.CUISINES.values()):
+            if p.source != "curated":
+                graph.save_cuisine(p)
+        added = kb.merge_graph_cuisines()
+        logging.getLogger("mealplanner").info("knowledge graph ready (%d generated cuisines loaded)", added)
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    # In the background so a slow or missing Atlas never delays startup; the JSON knowledge base serves meanwhile.
+    threading.Thread(target=_sync_graph, daemon=True).start()
+    yield
+
+
+app = FastAPI(title="meal-planner API", version="0.3.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
@@ -31,7 +55,27 @@ async def llm_error_handler(_, exc: LLMError):
 
 @app.get("/api/health")
 def health():
-    return {"ok": True, "models": models_status(), "cuisines": len(kb.CUISINES)}
+    return {"ok": True, "models": models_status(), "cuisines": len(kb.CUISINES), "graph": graph.available()}
+
+
+@app.get("/api/graph/stats")
+def graph_stats():
+    return graph.stats()
+
+
+class ExplainRequest(BaseModel):
+    cuisine_key: str
+    diet_type: str = "omnivore"
+    restrictions: list[str] = []
+    allergies: list[str] = []
+
+
+@app.post("/api/graph/explain")
+def graph_explain(req: ExplainRequest):
+    """Which dishes of a cuisine these preferences allow, and which rule blocks the rest."""
+    if req.cuisine_key not in kb.CUISINES:
+        raise HTTPException(404, "Unknown cuisine")
+    return graph.explain(req.cuisine_key, req.diet_type, req.restrictions, req.allergies)
 
 
 @app.get("/api/options")

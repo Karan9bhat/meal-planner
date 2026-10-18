@@ -9,7 +9,7 @@ const FEATURES = [
   {
     icon: "🌍",
     title: "Your food, wherever you are",
-    body: "Type any city — Lyon, Manchester, Baramulla, Москва. We plan with what people there actually cook and buy, priced in your currency.",
+    body: "Type any city — London, Mumbai, Mexico City, Tokyo. We plan with what people there actually cook and buy, priced in your currency.",
   },
   {
     icon: "💬",

@@ -34,6 +34,7 @@ export const DEFAULT_PROFILE: Profile = {
     equipment: ["stove", "refrigerator"],
     pantry: [],
     daily_budget: 10,
+    budget_currency: "",
     cook_minutes_per_day: 45,
     skill: "comfortable",
     batch_cooking: false,
@@ -47,10 +48,29 @@ export function cmToFtIn(cm: number) {
   return inch === 12 ? { ft: ft + 1, inch: 0 } : { ft, inch };
 }
 
-export function money(n: number, symbol: string) {
-  const digits = Math.abs(n) >= 100 ? 0 : n % 1 === 0 ? 0 : 2;
-  return `${symbol}${n.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
+export interface Currency {
+  code?: string;
+  symbol?: string;
 }
+
+/**
+ * Money in the region's currency. Formatting by ISO code disambiguates shared symbols:
+ * USD "$12", CLP "CLP 1,750", MXN "MX$150", CAD "CA$20", while INR/GBP/EUR/BRL keep ₹ £ € R$.
+ */
+export function money(n: number, cur: Currency) {
+  const digits = Math.abs(n) >= 100 || Number.isInteger(n) ? 0 : 2;
+  if (cur.code) {
+    try {
+      return new Intl.NumberFormat("en", { style: "currency", currency: cur.code, minimumFractionDigits: digits, maximumFractionDigits: digits }).format(n);
+    } catch {
+      /* unknown code: fall back to the symbol */
+    }
+  }
+  return `${cur.symbol ?? ""}${n.toLocaleString("en", { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
+}
+
+export const regionCurrency = (r: { currency_code: string; currency_symbol: string } | null | undefined): Currency =>
+  r ? { code: r.currency_code, symbol: r.currency_symbol } : { code: "USD", symbol: "$" };
 
 /** First blocker for a step, or null when it can be left. */
 export function stepBlocker(step: StepSlug, p: Profile): string | null {

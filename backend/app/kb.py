@@ -59,19 +59,36 @@ class CuisineProfile(BaseModel):
 
 # ---------- diet rules (tags match Dish.contains) ----------
 
-MEATS = ["poultry", "beef", "pork", "lamb_mutton"]
-SEAFOOD = ["fish", "shellfish"]
+# Ingredient tag hierarchy: rules can exclude a broad group and every tag beneath it is excluded too.
+# The knowledge graph stores this as INCLUDES edges and expands it with $graphLookup.
+TAG_HIERARCHY = {
+    "animal_product": ["meat", "seafood", "egg", "dairy"],
+    "meat": ["poultry", "red_meat"],
+    "red_meat": ["beef", "pork", "lamb_mutton"],
+    "seafood": ["fish", "shellfish"],
+}
+
+
+def expand_tags(tags: set[str] | list[str]) -> set[str]:
+    out, stack = set(), list(tags)
+    while stack:
+        t = stack.pop()
+        if t not in out:
+            out.add(t)
+            stack.extend(TAG_HIERARCHY.get(t, []))
+    return out
+
 
 DIET_TYPES = {
     "omnivore": {"label": "Everything", "desc": "No restrictions", "excludes": []},
     "flexitarian": {"label": "Flexitarian", "desc": "Mostly plants, meat now and then", "excludes": []},
-    "pollotarian": {"label": "Pollotarian", "desc": "Poultry, no red meat or seafood", "excludes": ["beef", "pork", "lamb_mutton", *SEAFOOD]},
-    "pescatarian": {"label": "Pescatarian", "desc": "Fish & seafood, no meat", "excludes": MEATS},
-    "eggetarian": {"label": "Eggetarian", "desc": "Vegetarian plus eggs", "excludes": MEATS + SEAFOOD},
-    "vegetarian": {"label": "Vegetarian", "desc": "Dairy ok; no meat, fish or eggs", "excludes": MEATS + SEAFOOD + ["egg"]},
-    "vegan": {"label": "Vegan", "desc": "No animal products", "excludes": MEATS + SEAFOOD + ["egg", "dairy"]},
-    "jain": {"label": "Jain", "desc": "Vegetarian, no root veg, onion or garlic", "excludes": MEATS + SEAFOOD + ["egg", "onion_garlic", "root_veg"]},
-    "sattvic": {"label": "Sattvic", "desc": "Vegetarian, no onion, garlic or stimulants", "excludes": MEATS + SEAFOOD + ["egg", "onion_garlic", "alcohol", "caffeine"]},
+    "pollotarian": {"label": "Pollotarian", "desc": "Poultry, no red meat or seafood", "excludes": ["red_meat", "seafood"]},
+    "pescatarian": {"label": "Pescatarian", "desc": "Fish & seafood, no meat", "excludes": ["meat"]},
+    "eggetarian": {"label": "Eggetarian", "desc": "Vegetarian plus eggs", "excludes": ["meat", "seafood"]},
+    "vegetarian": {"label": "Vegetarian", "desc": "Dairy ok; no meat, fish or eggs", "excludes": ["meat", "seafood", "egg"]},
+    "vegan": {"label": "Vegan", "desc": "No animal products", "excludes": ["animal_product"]},
+    "jain": {"label": "Jain", "desc": "Vegetarian, no root veg, onion or garlic", "excludes": ["meat", "seafood", "egg", "onion_garlic", "root_veg"]},
+    "sattvic": {"label": "Sattvic", "desc": "Vegetarian, no onion, garlic or stimulants", "excludes": ["meat", "seafood", "egg", "onion_garlic", "alcohol", "caffeine"]},
     "paleo": {"label": "Paleo", "desc": "No grains, legumes or dairy", "excludes": ["grains", "gluten", "legumes", "dairy"]},
 }
 
@@ -126,12 +143,20 @@ EQUIPMENT = {
 }
 
 
-def excluded_tags(diet_type: str, restrictions: list[str], allergies: list[str]) -> set[str]:
+def excluded_tags_local(diet_type: str, restrictions: list[str], allergies: list[str]) -> set[str]:
+    """In-memory rule expansion; the fallback when the knowledge graph isn't reachable."""
     tags = set(DIET_TYPES.get(diet_type, DIET_TYPES["omnivore"])["excludes"])
     for r in restrictions:
         tags.update(RESTRICTIONS.get(r, {}).get("excludes", []))
     tags.update(allergies)
-    return tags
+    return expand_tags(tags)
+
+
+def excluded_tags(diet_type: str, restrictions: list[str], allergies: list[str]) -> set[str]:
+    from . import graph  # local import: graph depends on this module
+
+    found = graph.excluded_tags(diet_type, restrictions, allergies)
+    return found if found is not None else excluded_tags_local(diet_type, restrictions, allergies)
 
 
 # ---------- loading ----------
@@ -171,10 +196,26 @@ def load() -> None:
 
 
 def save_generated(p: CuisineProfile) -> None:
+    from . import graph
+
     GENERATED_CUISINES.mkdir(parents=True, exist_ok=True)
     (GENERATED_CUISINES / f"{p.key}.json").write_text(p.model_dump_json(indent=2), encoding="utf-8")
+    graph.save_cuisine(p)  # Atlas copy survives redeploys; the file is a local cache
     with _lock:
         _index(p)
+
+
+def merge_graph_cuisines() -> int:
+    """Pull model-written profiles saved in the knowledge graph into memory (e.g. after a redeploy)."""
+    from . import graph
+
+    added = 0
+    for p in graph.generated_cuisines():
+        if p.key not in CUISINES:
+            with _lock:
+                _index(p)
+            added += 1
+    return added
 
 
 def _read_locations() -> dict[str, dict]:
@@ -185,10 +226,15 @@ def _read_locations() -> dict[str, dict]:
 
 
 def cached_location(text: str) -> dict | None:
-    return _read_locations().get(normalize(text))
+    from . import graph
+
+    return _read_locations().get(normalize(text)) or graph.find_place(text)
 
 
 def cache_location(text: str, entry: dict) -> None:
+    from . import graph
+
+    graph.save_place(text, entry)
     with _lock:
         locations = _read_locations()
         locations[normalize(text)] = entry

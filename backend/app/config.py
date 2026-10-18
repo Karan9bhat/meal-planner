@@ -133,7 +133,22 @@ def _usable(m: ModelSpec) -> bool:
     return PROVIDERS[m.provider].configured and not LOCAL_ONLY
 
 
+def _parse_overrides(raw: str) -> dict[str, list[str]]:
+    """ROUTE_OVERRIDE="plan=gemma-4-26b,gemma-4-31b;extract=gemma-4-26b" pins a task to specific models (testing)."""
+    out: dict[str, list[str]] = {}
+    for part in filter(None, (p.strip() for p in raw.split(";"))):
+        task, _, ids = part.partition("=")
+        out[task.strip()] = [i.strip() for i in ids.split(",") if i.strip() in MODELS]
+    return out
+
+
+ROUTE_OVERRIDES = _parse_overrides(_env("ROUTE_OVERRIDE"))
+
+
 def route(task: str, text: str = "") -> Route:
+    if ROUTE_OVERRIDES.get(task):
+        ids = ROUTE_OVERRIDES[task]
+        return Route(task, [MODELS[i] for i in ids if _usable(MODELS[i])], f"pinned by ROUTE_OVERRIDE → {', '.join(ids)}")
     ids, reason = ROUTES[task]
     ids = list(ids)
     if task == "extract" and _NON_LATIN.search(text):

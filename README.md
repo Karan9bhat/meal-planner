@@ -16,6 +16,23 @@ on open-weight models only, routed automatically per task.
 6. **Chat:** a **Mastra chat agent** (tools: knowledge-base search, day details, meal-swap proposals with an Apply button),
    behind a topic guardrail (`gpt-oss-safeguard-20b`) that only allows food, diet and meal-plan questions.
 
+### Knowledge graph (MongoDB Atlas)
+
+Reference knowledge (never user data: answers and plans stay in the browser) is a graph in two collections,
+`kg_nodes` and `kg_edges`:
+
+```
+place ─IN→ country ─USES→ currency        place ─EATS→ cuisine ─HAS_DISH→ dish ─CONTAINS→ tag
+diet / restriction ─EXCLUDES→ tag         allergy ─IS→ tag      tag ─INCLUDES→ tag (animal_product → meat → red_meat → beef)
+```
+
+- `$graphLookup` expands preferences into banned ingredient tags (vegan → animal_product → meat → … → beef) and
+  walks cuisine → dish → tag to find the dishes a person can eat (`backend/app/graph.py`).
+- Curated knowledge is seeded on startup (idempotent; skipped when unchanged). Gemma-written cuisine profiles and
+  resolved places are saved to Atlas, so they survive redeploys.
+- `GET /api/graph/stats` and `POST /api/graph/explain` show the graph and why a dish is allowed or blocked.
+- Without `MONGODB_URI` (or if Atlas is down) everything falls back to the JSON knowledge base, with identical rules.
+
 ### Model routing (no model picker)
 
 | Task | Chain (first available wins; later ones are fallbacks) |
@@ -48,6 +65,23 @@ Open http://localhost:3000. The frontend reads the same root `.env` for the agen
 ### Fully offline mode
 Install [Ollama](https://ollama.com), run `ollama pull gemma3:1b`, and set `LOCAL_ONLY=true` in `.env`. Planning then
 runs on your machine (slow on CPU-only laptops). The agents still use the hosted models for now.
+
+## Tests and evaluation
+
+```bash
+cd backend
+.venv/Scripts/pip install -r requirements-dev.txt
+.venv/Scripts/python -m pytest tests            # offline: maths, knowledge base, rules, balancer, variety, reference data
+.venv/Scripts/python -m pytest tests --live     # + places outside the KB resolve to the right currency (calls models)
+.venv/Scripts/python -m evals.region_plans      # full plans for 10 region/diet profiles -> evals/report.md
+```
+
+- **Reference data from the internet** (`tests/fixtures/`, rebuilt by `tests/tools/build_reference_data.py`):
+  USDA FoodData Central survey foods (FNDDS 2024) for per-portion calories/protein of 27 matched dishes, and the
+  mledoze/countries dataset for each country's currency.
+- The nutrition comparison prints a KB-vs-USDA table and fails on outliers (>60% off) or a median error above 25%.
+- If the MongoDB graph is configured, tests also check that graph traversals give exactly the same rules and dishes
+  as the in-memory fallback.
 
 ## Layout
 

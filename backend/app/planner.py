@@ -11,13 +11,15 @@ from concurrent.futures import ThreadPoolExecutor
 
 from pydantic import ValidationError
 
-from . import kb
+from . import graph, kb
 from .balance import balance_day
+from . import variety
 from .config import PROVIDERS, ModelSpec, Route, route
+from .observability import agent_span, step_span
 from .llm import LLMError, LLMResult, chat_json
 from .nutrition import apply_styles, compute_targets
 from .region import profile_for
-from .schemas import CheckRequest, DayCheck, Plan, PlanResponse, Profile, Targets
+from .schemas import CheckRequest, DayCheck, Plan, PlanDay, PlanResponse, Profile, Recipe, Targets
 
 log = logging.getLogger("mealplanner.planner")
 
@@ -34,8 +36,11 @@ You build realistic, affordable weekly meal plans that a real person can cook in
 4. Cook the food they know: build on what they already eat and their food culture, swapping in lighter versions rather than unfamiliar cuisine.
 5. Each day's total kcal should be close to the calorie target, and protein should reach the protein target.
 6. Use the household portions people use locally (cups, slices, bowls, katori, pieces) and keep them concrete.
-7. Respect their meal times and number of meals. Fit cooking time within their daily limit; reuse dishes and leftovers.
-8. Use at most {MAX_UNIQUE_RECIPES} distinct recipes for the week. Trivial items (tea, fruit, yogurt, boiled eggs, salad) need no recipe (recipe_id null).
+7. Respect their meal times and number of meals. Fit cooking time within their daily limit.
+8. VARIETY: no two days alike. A lunch or dinner main dish appears at most twice a week (cook once, eat the leftovers the
+   next day); each breakfast at most twice; each snack at most 3 times. Drinks like tea or coffee may repeat daily.
+9. Up to {MAX_UNIQUE_RECIPES} recipes, kept short (at most 8 ingredients and 6 steps). Trivial items (tea, fruit, yogurt,
+   boiled eggs, salad) need no recipe (recipe_id null).
 Respond with JSON only."""
 
 OUTPUT_SHAPE = """{
@@ -92,7 +97,8 @@ def _diet_rules(profile: Profile) -> str:
     banned = sorted(kb.excluded_tags(bg.diet_type, bg.restrictions, bg.allergies))
     diet = kb.DIET_TYPES.get(bg.diet_type, kb.DIET_TYPES["omnivore"])
     styles = ", ".join(kb.DIET_STYLES.get(s, s) for s in bg.diet_styles)
-    restrictions = ", ".join(kb.RESTRICTIONS[r]["label"] for r in bg.restrictions if r in kb.RESTRICTIONS)
+    # Preset keys get their labels; the user's own entries ("no food after sunset") pass through verbatim.
+    restrictions = ", ".join(kb.RESTRICTIONS[r]["label"] if r in kb.RESTRICTIONS else r for r in bg.restrictions)
     allergies = ", ".join(kb.ALLERGIES.get(a, a) for a in bg.allergies)
     notes = []
     if "halal" in bg.restrictions:
@@ -101,6 +107,7 @@ def _diet_rules(profile: Profile) -> str:
         notes.append("kosher: never mix meat and dairy in a meal")
     return f"""- Diet type: {diet['label']} ({diet['desc']})
 - Diet styles: {styles or 'none'}
+- Treat every restriction and allergy below as absolute, including ones the user wrote in their own words.
 - Restrictions: {restrictions or 'none'}{' (' + '; '.join(notes) + ')' if notes else ''}
 - Allergies: {allergies or 'none'}
 - Foods they want to avoid: {', '.join(bg.avoid_foods) or 'none'}
@@ -126,7 +133,9 @@ def build_context(profile: Profile, t: Targets) -> str:
         f"{k.replace('_', ' ')} at {v}" for k, v in home.meal_times.items()
     )
     culture_lines = "\n".join(f"- They also grew up with {c.name} food: {', '.join(c.staples[:8])}" for c in cultures)
-    refs = kb.reference_dishes([home.key, *[c.key for c in cultures]], banned)
+    keys = [home.key, *[c.key for c in cultures]]
+    # Knowledge graph traversal (cuisine → dish → tag) when Atlas is up; same data from memory otherwise.
+    refs = graph.allowed_dishes(keys, banned) or kb.reference_dishes(keys, banned)
     ref_lines = "\n".join(f"- {d.name} | {d.portion} | {d.kcal:g} kcal | {d.protein_g:g} g protein" for d in refs)
 
     return f"""PERSON
@@ -174,6 +183,8 @@ adjust portions until it lands within 5% of {t.target_kcal}. The shopping list s
 Return JSON exactly in this shape:
 {OUTPUT_SHAPE}""",
         route=r,
+        # Groq's free tier rejects (413) any request whose prompt + max_tokens exceeds its per-minute budget.
+        max_tokens=6500,
     )
 
 
@@ -182,6 +193,7 @@ RECIPES_PER_CALL = 4
 
 OUTLINE_SHAPE = """{
   "summary": "2-3 sentences on the approach for this person",
+  "week_menu": {"Monday": {"Breakfast": "Lentil and spinach omelette", "Lunch": "...", "Dinner": "..."}, "Tuesday": {}},
   "recipes": [{"id": "r1", "name": "Lentil and spinach omelette", "for": "Breakfast"}],
   "shopping_list": [{"item": "Spinach", "qty": "200 g", "est_cost": 1.2, "category": "Vegetables"}],
   "tips": ["short, specific, practical tips"]
@@ -214,9 +226,9 @@ def _draft_chunked(profile: Profile, t: Targets, r: Route) -> LLMResult:
         SYSTEM_PROMPT,
         f"""{ctx}
 
-STEP 1 of 2: choose this person's recipe list for the week (at most {MAX_UNIQUE_RECIPES} recipes covering their meal slots;
-trivial items like tea, fruit, yogurt or boiled eggs need no recipe), plus the weekly shopping list (only items NOT in the pantry)
-and a few tips. Do not plan the days yet.
+STEP 1 of 2: write the week_menu (the dish for every meal slot of all 7 days, following the VARIETY rule), the recipe
+list behind it (at most {MAX_UNIQUE_RECIPES}; trivial items like tea, fruit, yogurt or boiled eggs need no recipe), the
+weekly shopping list (only items NOT in the pantry) and a few tips. Portions and nutrition come in step 2.
 Return JSON exactly in this shape:
 {OUTLINE_SHAPE}""",
         route=r,
@@ -226,6 +238,16 @@ Return JSON exactly in this shape:
     same = Route(r.task, [outline.model], r.reason)
     stubs = [s for s in outline.data.get("recipes", []) if isinstance(s, dict) and s.get("id")][:MAX_UNIQUE_RECIPES]
     menu = _menu(stubs)
+    week_menu = outline.data.get("week_menu") if isinstance(outline.data.get("week_menu"), dict) else {}
+
+    def assigned(days: list[str]) -> str:
+        # Parallel day calls can't see each other, so the outline's menu is what keeps the week varied.
+        lines = []
+        for d in days:
+            slots = week_menu.get(d)
+            if isinstance(slots, dict) and slots:
+                lines.append(f"- {d}: " + "; ".join(f"{k}: {v}" for k, v in slots.items()))
+        return "\n".join(lines)
 
     def plan_days(days: list[str]) -> list[dict]:
         res = chat_json(
@@ -235,7 +257,8 @@ Return JSON exactly in this shape:
 THE WEEK'S RECIPES (use these recipe_id values; trivial items get recipe_id null)
 {menu}
 
-Plan ONLY these days: {', '.join(days)}. Vary breakfasts and dinners between days; reuse batch-cooked dishes sensibly.
+Plan ONLY these days: {', '.join(days)}.
+{('Use exactly these dishes (from the week menu):' + chr(10) + assigned(days)) if assigned(days) else 'Follow the VARIETY rule; vary every meal between days.'}
 Aim for about {t.target_kcal} kcal per day and put the sum in day_total_kcal. Don't deliberate over exact numbers:
 our code re-checks every total and fine-tunes portions afterwards.
 Return JSON exactly in this shape:
@@ -298,8 +321,71 @@ Return JSON exactly in this shape:
     return LLMResult(data, outline.model, outline.reason)
 
 
-def _draft(profile: Profile, t: Targets) -> LLMResult:
-    """Walk the plan route: single call on fast hosts, chunked on slow ones; fall through on capacity errors."""
+VARIED_SHAPE = """{"days": [ ...same day shape as before, only the days asked for... ],
+ "recipes": [ ...full recipes for any NEW dish, same shape as before, ids "v1", "v2"... ]}"""
+
+
+def _vary(profile: Profile, t: Targets, plan: Plan, bad_days: list[str], overused: dict[str, int]) -> Plan:
+    """Re-plan only the repetitive days, steering away from dishes the rest of the week already uses."""
+    kept = [d for d in plan.days if d.day not in bad_days]
+    used = sorted({variety.dish_key(m.dish) for d in kept for m in d.meals if not m.top_up})
+    recipes = ", ".join(f"{r.id}={r.name}" for r in plan.recipes)
+    res = chat_json(
+        SYSTEM_PROMPT,
+        f"""{build_context(profile, t)}
+
+The week is too repetitive ({', '.join(f'{k} ×{v}' for k, v in overused.items())}).
+Re-plan ONLY these days with fresh dishes: {', '.join(bad_days)}.
+Do NOT use any of these dishes again: {', '.join(used) or 'none'}.
+Every breakfast, lunch and dinner on these days must differ from each other and from that list; leftovers of the
+previous day's dinner are allowed once. Existing recipes you may still use: {recipes or 'none'}.
+Aim for about {t.target_kcal} kcal and {t.protein_g} g protein per day; put the sum in day_total_kcal.
+Return JSON exactly in this shape (day shape as in this example):
+{DAYS_SHAPE}
+plus, for new dishes that need cooking:
+{VARIED_SHAPE}""",
+        route=route("plan"),
+        max_tokens=1300 * len(bad_days) + 1500,
+    )
+    # Validate each returned day and recipe on its own: one malformed entry shouldn't discard the rest.
+    new_days: dict[str, PlanDay] = {}
+    for raw in res.data.get("days", []):
+        if isinstance(raw, dict) and raw.get("day") in bad_days:
+            try:
+                day = PlanDay.model_validate(raw)
+                if day.meals:
+                    new_days[day.day] = day
+            except ValidationError as e:
+                log.warning("variety pass: dropped malformed %s (%d errors)", raw.get("day"), e.error_count())
+    recipes = list(plan.recipes)
+    known = {r.id for r in recipes}
+    for raw in res.data.get("recipes", []):
+        try:
+            rec = Recipe.model_validate(raw)
+            if rec.id not in known:
+                recipes.append(rec)
+                known.add(rec.id)
+        except ValidationError:
+            continue
+    return plan.model_copy(update={"days": [new_days.get(d.day, d) for d in plan.days], "recipes": recipes})
+
+
+def _validated(result: LLMResult) -> tuple[Plan, bool]:
+    missing_recipes = bool(result.data.pop("_missing_recipes", False))
+    try:
+        plan = Plan.model_validate(result.data)
+    except ValidationError as e:
+        where = "; ".join(f"{'.'.join(map(str, err['loc']))}: {err['msg']}" for err in e.errors()[:3])
+        log.warning("%s returned an invalid plan (%s)", result.model.label, where)
+        raise LLMError("The model returned a plan in an unexpected format. Please try again.", 502) from e
+    if not plan.days:
+        raise LLMError("The model returned an empty plan. Please try again.", 502)
+    return plan, missing_recipes
+
+
+def _draft(profile: Profile, t: Targets) -> tuple[Plan, bool, LLMResult]:
+    """Walk the plan route: single call on fast hosts, chunked on slow ones. Capacity errors and invalid output
+    both fall through to the next model."""
     r = route("plan")
     if not r.models:
         raise LLMError("No model is configured. Add an API key to .env (see .env.example).", 500)
@@ -307,9 +393,9 @@ def _draft(profile: Profile, t: Targets) -> LLMResult:
     for spec in r.models:
         one = Route(r.task, [spec], r.reason)
         try:
-            if PROVIDERS[spec.provider].chunked:
-                return _draft_chunked(profile, t, one)
-            return _draft_single(profile, t, one)
+            result = _draft_chunked(profile, t, one) if PROVIDERS[spec.provider].chunked else _draft_single(profile, t, one)
+            plan, missing = _validated(result)
+            return plan, missing, result
         except LLMError as e:
             if e.status not in (429, 502, 503):
                 raise
@@ -345,26 +431,52 @@ def recheck(req: CheckRequest) -> list[DayCheck]:
 
 
 def generate_plan(profile: Profile) -> PlanResponse:
+    bg = profile.background
+    with agent_span("planner", **{"plan.region": bg.region.key if bg.region else "none", "plan.diet": bg.diet_type,
+                                  "plan.styles": ",".join(bg.diet_styles)}) as span:
+        res = _generate_plan(profile)
+        if span is not None:
+            span.set_data("gen_ai.request.model", res.model)
+            span.set_data("plan.route_reason", res.route_reason)
+            span.set_data("plan.kcal_days_ok", sum(c.kcal_ok for c in res.checks))
+            span.set_data("plan.protein_days_ok", sum(c.protein_ok for c in res.checks))
+            span.set_data("plan.budget_days_ok", sum(c.budget_ok for c in res.checks))
+            span.set_data("plan.distinct_dishes", variety.distinct_dishes(res.plan))
+        return res
+
+
+def _generate_plan(profile: Profile) -> PlanResponse:
     started = time.perf_counter()
     bg = profile.background
     targets = apply_styles(compute_targets(profile.basics), profile.basics, bg.diet_styles)
     warnings = list(targets.warnings)
     home, _ = _cuisines(profile)
 
-    result = _draft(profile, targets)
-    if result.data.pop("_missing_recipes", False):
+    with step_span("plan.draft"):
+        plan, missing_recipes, result = _draft(profile, targets)
+    if missing_recipes:
         warnings.append("Some recipes came back without steps — tap 'Try another week' to regenerate.")
-    try:
-        plan = Plan.model_validate(result.data)
-    except ValidationError as e:
-        raise LLMError("The model returned a plan in an unexpected format. Please try again.", 502) from e
-    if not plan.days:
-        raise LLMError("The model returned an empty plan. Please try again.", 502)
+
+    # Variety is checked by code, like calories: only the repetitive days go back to the model.
+    bad_days, overused = variety.check(plan)
+    if bad_days:
+        log.info("re-planning repetitive days %s (%s)", bad_days, overused)
+        try:
+            with step_span("plan.variety_pass", days=",".join(bad_days)):
+                plan = _vary(profile, targets, plan, bad_days, overused)
+        except (LLMError, ValidationError) as e:
+            log.warning("variety pass failed: %s", e)
+        still, _ = variety.check(plan)
+        if still:
+            warnings.append(f"A few meals repeat more than we'd like ({', '.join(still)}) — ask the assistant for a swap.")
 
     budget = profile.kitchen.daily_budget
     banned = kb.excluded_tags(bg.diet_type, bg.restrictions, bg.allergies)
-    avoid = {a.lower() for a in bg.avoid_foods}
-    topped = [d.day for d in plan.days if balance_day(d, targets, banned, avoid, home.daily_budget.typical)]
+    # Custom allergies (e.g. "kiwi") aren't tags, so the balancer avoids them by name.
+    avoid = {a.lower() for a in bg.avoid_foods} | {a.lower() for a in bg.allergies if a not in kb.ALLERGIES}
+    # Top-up costs are a share of the user's own daily budget, so they're always in the right currency.
+    with step_span("plan.balance"):
+        topped = [d.day for d in plan.days if balance_day(d, targets, banned, avoid, budget)]
     if topped:
         log.info("balancer adjusted %s", topped)
     checks = check_days(plan, targets, budget)
@@ -384,6 +496,7 @@ def generate_plan(profile: Profile) -> PlanResponse:
         checks=checks,
         warnings=warnings,
         currency_symbol=home.currency.symbol,
+        currency_code=home.currency.code,
         model=spec.model,
         model_label=spec.label,
         provider=spec.provider,

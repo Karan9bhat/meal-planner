@@ -1,0 +1,67 @@
+# Render Blueprint: two web services from this repo.
+# Secrets use `sync: false`: Render asks for their values when you apply the Blueprint; they are never stored here.
+services:
+  # FastAPI: targets, knowledge base, region lookup, planner.
+  - type: web
+    name: meal-planner-api
+    runtime: python
+    plan: free
+    region: singapore
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    domains:
+      - api.kilobite.tech
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.3
+      - key: API_KEY # Groq
+        sync: false
+      - key: GEMMA_API_KEY # Google AI Studio
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+      - key: SENTRY_ENVIRONMENT
+        value: production
+      - key: MONGODB_URI # Atlas knowledge graph (X.509 auth)
+        sync: false
+      # Upload the Atlas certificate as a Secret File named mongodb-x509.pem (Environment → Secret Files).
+      - key: MONGODB_CERT_PATH
+        value: /etc/secrets/mongodb-x509.pem
+      - key: ENABLE_LOCAL_MODELS
+        value: "false"
+      - key: CORS_ORIGINS
+        value: https://kilobite.tech,https://www.kilobite.tech
+      # Also allow the frontend's own onrender.com address (replaces the localhost-only default).
+      - key: CORS_ORIGIN_REGEX
+        value: ^https://meal-planner-web[a-z0-9-]*\.onrender\.com$
+
+  # Next.js UI + Mastra agent routes.
+  - type: web
+    name: meal-planner-web
+    runtime: node
+    plan: free
+    region: singapore
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    domains:
+      - kilobite.tech
+      - www.kilobite.tech
+    envVars:
+      - key: NODE_VERSION
+        value: 22.14.0
+      - key: API_KEY # Groq, for the agents
+        sync: false
+      - key: GEMMA_API_KEY
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+      - key: SENTRY_ENVIRONMENT
+        value: production
+      # Browser -> API (baked in at build time) and agent routes -> API.
+      - key: NEXT_PUBLIC_API_URL
+        value: https://api.kilobite.tech
+      - key: BACKEND_URL
+        value: https://api.kilobite.tech

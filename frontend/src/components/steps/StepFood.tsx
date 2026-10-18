@@ -2,10 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { regionStatus, resolveRegion } from "@/lib/api";
-import { money } from "@/lib/form";
+import { money, regionCurrency } from "@/lib/form";
 import { usePlan } from "@/lib/store";
-import type { RegionResolution } from "@/lib/types";
-import { Card, Chip, Section, TagInput, Tile, cx, toggleIn } from "../ui";
+import type { RegionRef, RegionResolution } from "@/lib/types";
+import { Card, ChipsWithCustom, Section, TagInput, Tile, cx } from "../ui";
 
 const DIET_ICONS: Record<string, string> = {
   omnivore: "🍽️",
@@ -20,7 +20,13 @@ const DIET_ICONS: Record<string, string> = {
   paleo: "🥩",
 };
 
-const EXAMPLES = ["Lyon", "Manchester", "Baramulla", "Moscow", "Delhi", "Mexico City", "Kraków"];
+const EXAMPLES = ["London", "New York", "Mumbai", "Paris", "Tokyo", "Mexico City", "Dubai"];
+
+// Broad, widely recognised food cultures; anything else can be typed in.
+const CULTURES = [
+  "Indian", "Chinese", "Italian", "Mexican", "Middle Eastern", "Mediterranean", "Japanese", "Korean",
+  "Thai", "French", "British", "American", "African", "Latin American",
+];
 
 export function StepFood() {
   const { profile, options, setBackground, setKitchen } = usePlan();
@@ -31,11 +37,20 @@ export function StepFood() {
   const [error, setError] = useState<string | null>(null);
   const polling = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // A profile's budget only applies when it's priced in this place's currency (Toronto eats "American" but pays CAD).
+  const budgetFor = (place: RegionRef, r: RegionResolution) =>
+    place.budget?.typical ? place.budget : r.region.currency_code === place.currency_code ? r.budget : {};
+
+  const applyBudget = (place: RegionRef, budget: RegionRef["budget"]) => {
+    if (budget?.typical) setKitchen({ daily_budget: budget.typical, budget_currency: place.currency_code });
+  };
+
   // Show the card for a region chosen on an earlier visit.
   useEffect(() => {
     if (bg.region && !resolution) {
-      regionStatus(bg.region.key)
-        .then((r) => setResolution({ ...r, region: bg.region! }))
+      const place = bg.region;
+      regionStatus(place.key)
+        .then((r) => setResolution({ ...r, region: place, budget: budgetFor(place, r) }))
         .catch(() => undefined);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -48,8 +63,14 @@ export function StepFood() {
       try {
         const r = await regionStatus(resolution.region.key);
         if (r.status !== "generating") {
-          setResolution({ ...r, region: resolution.region });
-          if (r.budget.typical) setKitchen({ daily_budget: r.budget.typical });
+          const place = resolution.region;
+          const budget = budgetFor(place, r);
+          setResolution({ ...r, region: place, budget });
+          // Fill the budget in only if the quick lookup couldn't estimate one.
+          if (!place.budget?.typical && budget.typical) {
+            setBackground({ region: { ...place, budget } });
+            applyBudget(place, budget);
+          }
         }
       } catch {
         /* keep polling */
@@ -58,7 +79,8 @@ export function StepFood() {
     return () => {
       if (polling.current) clearInterval(polling.current);
     };
-  }, [resolution, setKitchen]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resolution]);
 
   async function find(location: string) {
     const loc = location.trim();
@@ -69,7 +91,7 @@ export function StepFood() {
       const r = await resolveRegion(loc);
       setResolution(r);
       setBackground({ location: loc, region: r.region });
-      if (r.budget.typical) setKitchen({ daily_budget: r.budget.typical });
+      applyBudget(r.region, r.region.budget?.typical ? r.region.budget : r.budget);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -77,9 +99,7 @@ export function StepFood() {
     }
   }
 
-  const cultureSuggestions = (options?.cuisines ?? [])
-    .filter((c) => c.key !== bg.region?.key && !bg.cultures.includes(c.name))
-    .slice(0, 12);
+  const cultureSuggestions = CULTURES.filter((c) => !bg.cultures.some((x) => x.toLowerCase() === c.toLowerCase()));
 
   return (
     <div className="space-y-6">
@@ -95,7 +115,7 @@ export function StepFood() {
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="e.g. Lyon, Manchester, Baramulla, Москва…"
+              placeholder="e.g. London, Mumbai, Paris, New York…"
               aria-label="Where you live"
               className="min-w-0 flex-1 rounded-xl border border-line bg-surface-2 px-4 py-3 text-base outline-none transition placeholder:text-muted focus:border-accent focus:bg-surface"
             />
@@ -133,17 +153,17 @@ export function StepFood() {
 
       <Card>
         <Section title="Food culture you grew up with" hint="Optional — it can differ from where you live now. Pick or type any.">
-          <TagInput values={bg.cultures} onChange={(cultures) => setBackground({ cultures })} placeholder="e.g. Kashmiri, Polish, Lebanese… (Enter to add)" />
+          <TagInput values={bg.cultures} onChange={(cultures) => setBackground({ cultures })} placeholder="Type any cuisine and press Enter, e.g. Indian, Italian…" />
           {cultureSuggestions.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {cultureSuggestions.map((c) => (
                 <button
-                  key={c.key}
+                  key={c}
                   type="button"
-                  onClick={() => setBackground({ cultures: [...bg.cultures, c.name] })}
+                  onClick={() => setBackground({ cultures: [...bg.cultures, c] })}
                   className="rounded-full border border-dashed border-line px-3 py-1 text-xs hover:border-accent hover:bg-accent-soft"
                 >
-                  + {c.name}
+                  + {c}
                 </button>
               ))}
             </div>
@@ -167,34 +187,31 @@ export function StepFood() {
           </div>
         </Section>
 
-        <Section title="Any eating style?" hint="Optional. These shape your macros and recipes rather than banning foods.">
-          <div className="flex flex-wrap gap-2">
-            {Object.entries(options?.diet_styles ?? {}).map(([key, label]) => (
-              <Chip key={key} selected={bg.diet_styles.includes(key)} onClick={() => setBackground({ diet_styles: toggleIn(bg.diet_styles, key) })}>
-                {label}
-              </Chip>
-            ))}
-          </div>
+        <Section title="Any eating style?" hint="Optional. These shape your macros and recipes rather than banning foods. Add your own if it's not listed.">
+          <ChipsWithCustom
+            options={options?.diet_styles ?? {}}
+            values={bg.diet_styles}
+            onChange={(diet_styles) => setBackground({ diet_styles })}
+            addLabel="Add your own style"
+          />
         </Section>
 
-        <Section title="Religious or personal rules" hint="Treated as hard rules, never suggestions.">
-          <div className="flex flex-wrap gap-2">
-            {Object.entries(options?.restrictions ?? {}).map(([key, label]) => (
-              <Chip key={key} selected={bg.restrictions.includes(key)} onClick={() => setBackground({ restrictions: toggleIn(bg.restrictions, key) })}>
-                {label}
-              </Chip>
-            ))}
-          </div>
+        <Section title="Religious or personal rules" hint="Treated as hard rules, never suggestions — e.g. “no food after sunset”, “no red meat on Tuesdays”.">
+          <ChipsWithCustom
+            options={options?.restrictions ?? {}}
+            values={bg.restrictions}
+            onChange={(restrictions) => setBackground({ restrictions })}
+            addLabel="Add your own rule"
+          />
         </Section>
 
-        <Section title="Allergies & intolerances">
-          <div className="flex flex-wrap gap-2">
-            {Object.entries(options?.allergies ?? {}).map(([key, label]) => (
-              <Chip key={key} selected={bg.allergies.includes(key)} onClick={() => setBackground({ allergies: toggleIn(bg.allergies, key) })}>
-                {label}
-              </Chip>
-            ))}
-          </div>
+        <Section title="Allergies & intolerances" hint="Anything missing? Type it — e.g. kiwi, mustard, lupin.">
+          <ChipsWithCustom
+            options={options?.allergies ?? {}}
+            values={bg.allergies}
+            onChange={(allergies) => setBackground({ allergies })}
+            addLabel="Add an allergy"
+          />
         </Section>
 
         <Section title="Anything you just don't like?" hint="Type and press Enter — e.g. mushrooms, coriander, olives.">
@@ -206,7 +223,7 @@ export function StepFood() {
 }
 
 function RegionCard({ r }: { r: RegionResolution }) {
-  const sym = r.region.currency_symbol;
+  const cur = regionCurrency(r.region);
   return (
     <div className={cx("animate-rise rounded-xl border p-4", r.status === "failed" ? "border-chili/30 bg-chili-soft" : "border-leaf/30 bg-leaf-soft/60")}>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -214,7 +231,7 @@ function RegionCard({ r }: { r: RegionResolution }) {
           📍 {r.region.place} <span className="font-normal text-muted">→ {r.region.name} home cooking</span>
         </p>
         <span className="text-xs text-muted">
-          {r.region.currency_code} {sym}
+          {r.region.currency_code} {r.region.currency_symbol}
         </span>
       </div>
       {r.status === "generating" && (
@@ -235,7 +252,7 @@ function RegionCard({ r }: { r: RegionResolution }) {
       )}
       {r.status === "ready" && r.budget.typical != null && (
         <p className="mt-3 text-xs text-muted">
-          Typical home food budget there: {money(r.budget.low ?? 0, sym)}–{money(r.budget.high ?? 0, sym)} per person per day
+          Typical home food budget there: {money(r.budget.low ?? 0, cur)}–{money(r.budget.high ?? 0, cur)} per person per day
         </p>
       )}
       <p className="mt-2 text-[11px] text-muted">

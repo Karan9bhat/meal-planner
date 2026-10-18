@@ -1,4 +1,5 @@
 import { RequestContext } from "@mastra/core/request-context";
+import * as Sentry from "@sentry/node";
 import type { DayMeal, IntakeResult, Profile } from "@/lib/types";
 import { mastra } from "@/mastra";
 import { intakeSchema } from "@/mastra/agents/intake";
@@ -60,6 +61,7 @@ ${answers?.trim() ? `\nTHEIR ANSWERS TO YOUR EARLIER QUESTIONS\n"""${answers.tri
     return Response.json(body);
   } catch (e) {
     console.error("intake agent failed", e);
+    Sentry.captureException(e, { tags: { agent: "intake" } });
     const detail = process.env.NODE_ENV === "development" ? String(e) : undefined;
     return Response.json({ error: "The assistant couldn't read that right now. Please try again in a moment.", detail }, { status: 502 });
   }

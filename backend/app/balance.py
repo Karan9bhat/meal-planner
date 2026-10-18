@@ -38,6 +38,16 @@ ENERGY_FILLERS = [
     Food("Banana", "1 medium", 105, 1, 27, 0.4, 0.03, ()),
     Food("Boiled potato", "1 medium", 130, 3, 30, 0.2, 0.02, ("root_veg",)),
 ]
+# Staples that can be trimmed to make room for protein, matched against the day's own dish names.
+TRIMMABLE = [
+    (("rice", "pulao", "biryani", "risotto", "congee"), Food("Cooked rice", "1/2 cup", 100, 2, 22, 0.2, 0.02, ("grains",))),
+    (("roti", "chapati", "paratha", "naan", "bread", "toast", "baguette", "tartine", "sandwich", "bhakri", "tortilla", "pav"),
+     Food("Bread / roti", "1 slice or 1 roti", 95, 3, 17, 1, 0.02, ("gluten", "grains"))),
+    (("pasta", "spaghetti", "noodle", "macaroni", "ramen", "soba", "udon"),
+     Food("Cooked pasta / noodles", "1/2 cup", 110, 4, 21, 0.7, 0.02, ("gluten", "grains"))),
+    (("potato", "aloo", "fries", "chips"), Food("Potato", "1 small", 100, 2, 22, 0.1, 0.02, ("root_veg",))),
+]
+MAX_TRIMS_PER_DAY = 3
 PROTEIN_SLOTS = ["snack", "breakfast", "lunch", "dinner"]
 ENERGY_SLOTS = ["lunch", "dinner", "breakfast"]
 MAX_TOPUPS_PER_DAY = 4
@@ -83,14 +93,23 @@ def balance_day(day: PlanDay, t: Targets, banned: set[str], avoid: set[str], typ
     kcal = sum(m.kcal for m in day.meals)
     protein = sum(m.protein_g for m in day.meals)
     ceiling = t.target_kcal * 1.05
-    boosters = _allowed(PROTEIN_BOOSTERS, banned, avoid)
+    # Most protein per calorie first (tofu, cottage cheese, eggs… before lentils and chickpeas).
+    boosters = sorted(_allowed(PROTEIN_BOOSTERS, banned, avoid), key=lambda f: -f.protein_g / f.kcal)
     fillers = _allowed(ENERGY_FILLERS, banned, avoid)
 
-    # Protein short and no calorie room: trim one staple serving first.
-    if boosters and fillers and protein < t.protein_g * 0.9 and kcal + boosters[0].kcal > ceiling:
-        _add(day, fillers[0], -1, ENERGY_SLOTS[::-1], typical_budget, label="Swap out")
-        kcal -= fillers[0].kcal
-        protein -= fillers[0].protein_g
+    # Protein short and no calorie room: trim servings of a starch the day actually contains (up to 3).
+    text = " ".join(m.dish.lower() for m in day.meals)
+    trim = next((f for words, f in TRIMMABLE if any(w in text for w in words)), None)
+    trims = 0
+    # Make room for as many servings of the densest booster as the protein gap needs (max 2), not just one.
+    servings = min(2, ceil(max(0.0, t.protein_g * 0.9 - protein) / boosters[0].protein_g)) if boosters else 0
+    while (servings and trim and protein < t.protein_g * 0.9 and kcal + boosters[0].kcal * servings > ceiling
+           and trims < MAX_TRIMS_PER_DAY):
+        trims += 1
+        kcal -= trim.kcal
+        protein -= trim.protein_g
+    if trims:
+        _add(day, trim, -trims, ENERGY_SLOTS[::-1], typical_budget, label="Swap out")
         changes += 1
 
     for food in boosters:

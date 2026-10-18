@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { analyzePantry, regionStatus } from "@/lib/api";
-import { money } from "@/lib/form";
+import { analyzePantry } from "@/lib/api";
+import { money, regionCurrency } from "@/lib/form";
 import { usePlan } from "@/lib/store";
 import type { PantryResult } from "@/lib/types";
 import { Card, RangeField, Section, Segmented, Tile, Toggle, toggleIn } from "../ui";
@@ -28,21 +28,22 @@ export function StepKitchen() {
   const { profile, options, setKitchen } = usePlan();
   const k = profile.kitchen;
   const region = profile.background.region;
-  const sym = region?.currency_symbol ?? "$";
+  const cur = regionCurrency(region);
   const [pantryText, setPantryText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [agent, setAgent] = useState<Pick<PantryResult, "suggestions" | "model" | "route_reason" | "equipment"> | null>(null);
   const [categories, setCategories] = useState<Record<string, string>>({});
-  const [range, setRange] = useState<{ low: number; high: number } | null>(null);
+  const range = region?.budget?.low != null && region.budget.high != null ? { low: region.budget.low, high: region.budget.high } : null;
 
-  // Budget slider range from the region's typical food prices.
+  // A budget set for another region is in the wrong currency (₹250 is not $250): reset it to the local typical.
   useEffect(() => {
-    if (!region) return;
-    regionStatus(region.key)
-      .then((r) => r.budget.low != null && r.budget.high != null && setRange({ low: r.budget.low, high: r.budget.high }))
-      .catch(() => undefined);
-  }, [region]);
+    if (!region || k.budget_currency === region.currency_code) return;
+    setKitchen({
+      budget_currency: region.currency_code,
+      ...(region.budget?.typical ? { daily_budget: region.budget.typical } : {}),
+    });
+  }, [region, k.budget_currency, setKitchen]);
 
   async function readPantry() {
     setBusy(true);
@@ -70,10 +71,11 @@ export function StepKitchen() {
     grouped.set(cat, [...(grouped.get(cat) ?? []), item]);
   }
 
-  // Slider spans a bit below "low" to well above "high" in the local currency.
-  const minB = range ? Math.max(1, Math.floor(range.low * 0.5)) : 1;
+  // Slider spans half of "low" to twice "high" in the local currency, with a step that suits its magnitude
+  // (0.5 for £/€/$, 10 for ₹, 100 for CLP or JPY).
+  const minB = range ? Math.max(0.5, Math.floor(range.low * 0.5)) : 1;
   const maxB = range ? Math.ceil(range.high * 2) : Math.max(50, k.daily_budget * 3);
-  const step = maxB > 200 ? 10 : maxB > 40 ? 1 : 0.5;
+  const step = Math.max(0.5, 10 ** Math.floor(Math.log10(maxB / 100)));
 
   return (
     <div className="space-y-6">
@@ -190,8 +192,8 @@ export function StepKitchen() {
           max={maxB}
           step={step}
           onChange={(daily_budget) => setKitchen({ daily_budget })}
-          display={money(k.daily_budget, sym)}
-          hint={`≈ ${money(k.daily_budget * 30, sym)} a month on groceries${range ? ` · typical locally: ${money(range.low, sym)}–${money(range.high, sym)}/day` : ""}`}
+          display={money(k.daily_budget, cur)}
+          hint={`≈ ${money(k.daily_budget * 30, cur)} a month on groceries${range ? ` · typical locally: ${money(range.low, cur)}–${money(range.high, cur)}/day` : ""}`}
         />
         <RangeField
           label="Time you can spend cooking per day"

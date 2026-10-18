@@ -1,0 +1,276 @@
+{
+  "source": "USDA FoodData Central, Survey (FNDDS) 2024-10-31 — https://fdc.nal.usda.gov/download-datasets",
+  "built": "2026-10-18",
+  "items": [
+    {
+      "cuisine": "north_indian",
+      "dish": "Steamed rice",
+      "usda_food": "Rice, white, cooked, NS as to fat",
+      "usda_fdc_id": 2708403,
+      "grams": 163,
+      "grams_basis": "USDA '1 cup, cooked'",
+      "usda_kcal": 210,
+      "usda_protein_g": 4.4
+    },
+    {
+      "cuisine": "north_indian",
+      "dish": "Dal tadka",
+      "usda_food": "Dal",
+      "usda_fdc_id": 2707427,
+      "grams": 150,
+      "grams_basis": "1 katori ≈ 150 g",
+      "usda_kcal": 218,
+      "usda_protein_g": 12.9
+    },
+    {
+      "cuisine": "north_indian",
+      "dish": "Palak paneer",
+      "usda_food": "Palak Paneer",
+      "usda_fdc_id": 2709631,
+      "grams": 150,
+      "grams_basis": "1 katori ≈ 150 g",
+      "usda_kcal": 152,
+      "usda_protein_g": 8.1
+    },
+    {
+      "cuisine": "north_indian",
+      "dish": "Samosa",
+      "usda_food": "Samosa",
+      "usda_fdc_id": 2708730,
+      "grams": 100,
+      "grams_basis": "USDA '1 regular/large'",
+      "usda_kcal": 310,
+      "usda_protein_g": 5.1
+    },
+    {
+      "cuisine": "north_indian",
+      "dish": "Chicken curry",
+      "usda_food": "Chicken curry",
+      "usda_fdc_id": 2706437,
+      "grams": 200,
+      "grams_basis": "1 katori with 3 pieces ≈ 200 g",
+      "usda_kcal": 214,
+      "usda_protein_g": 13.0
+    },
+    {
+      "cuisine": "south_indian",
+      "dish": "Idli",
+      "usda_food": "Idli",
+      "usda_fdc_id": 2708346,
+      "grams": 76,
+      "grams_basis": "USDA '1 item' 38 g × 2",
+      "usda_kcal": 97,
+      "usda_protein_g": 4.8
+    },
+    {
+      "cuisine": "south_indian",
+      "dish": "Plain dosa",
+      "usda_food": "Dosa, plain",
+      "usda_fdc_id": 2708347,
+      "grams": 80,
+      "grams_basis": "USDA '1 medium'",
+      "usda_kcal": 168,
+      "usda_protein_g": 4.6
+    },
+    {
+      "cuisine": "south_indian",
+      "dish": "Masala dosa",
+      "usda_food": "Dosa, with filling",
+      "usda_fdc_id": 2709129,
+      "grams": 267,
+      "grams_basis": "USDA '1 medium'",
+      "usda_kcal": 491,
+      "usda_protein_g": 14.6
+    },
+    {
+      "cuisine": "french",
+      "dish": "Ratatouille",
+      "usda_food": "Ratatouille",
+      "usda_fdc_id": 2710028,
+      "grams": 215,
+      "grams_basis": "USDA '1 cup'",
+      "usda_kcal": 144,
+      "usda_protein_g": 2.3
+    },
+    {
+      "cuisine": "french",
+      "dish": "Plain yogurt (yaourt nature)",
+      "usda_food": "Yogurt, whole milk, plain",
+      "usda_fdc_id": 2705418,
+      "grams": 125,
+      "grams_basis": "French pot = 125 g",
+      "usda_kcal": 98,
+      "usda_protein_g": 4.8
+    },
+    {
+      "cuisine": "french",
+      "dish": "Quiche lorraine",
+      "usda_food": "Quiche with meat, poultry or fish",
+      "usda_fdc_id": 2708731,
+      "grams": 140,
+      "grams_basis": "home slice ≈ 140 g",
+      "usda_kcal": 542,
+      "usda_protein_g": 21.7
+    },
+    {
+      "cuisine": "russian",
+      "dish": "Kefir",
+      "usda_food": "Kefir",
+      "usda_fdc_id": 2705394,
+      "grams": 244,
+      "grams_basis": "USDA '1 cup'",
+      "usda_kcal": 127,
+      "usda_protein_g": 8.8
+    },
+    {
+      "cuisine": "italian",
+      "dish": "Minestrone",
+      "usda_food": "Soup, minestrone",
+      "usda_fdc_id": 2710114,
+      "grams": 300,
+      "grams_basis": "1 bowl ≈ 300 g",
+      "usda_kcal": 120,
+      "usda_protein_g": 5.1
+    },
+    {
+      "cuisine": "italian",
+      "dish": "Cappuccino",
+      "usda_food": "Coffee, Cappuccino",
+      "usda_fdc_id": 2710472,
+      "grams": 180,
+      "grams_basis": "Italian cup ≈ 180 ml",
+      "usda_kcal": 49,
+      "usda_protein_g": 3.1
+    },
+    {
+      "cuisine": "american",
+      "dish": "Mac and cheese",
+      "usda_food": "Macaroni or noodles with cheese",
+      "usda_fdc_id": 2708811,
+      "grams": 230,
+      "grams_basis": "USDA '1 cup'",
+      "usda_kcal": 513,
+      "usda_protein_g": 20.0
+    },
+    {
+      "cuisine": "american",
+      "dish": "Cheeseburger",
+      "usda_food": "Cheeseburger, NFS",
+      "usda_fdc_id": 2706888,
+      "grams": 165,
+      "grams_basis": "USDA '1 cheeseburger'",
+      "usda_kcal": 488,
+      "usda_protein_g": 29.5
+    },
+    {
+      "cuisine": "mexican",
+      "dish": "Quesadilla",
+      "usda_food": "Quesadilla, cheese only",
+      "usda_fdc_id": 2708591,
+      "grams": 120,
+      "grams_basis": "USDA '1 full circle'",
+      "usda_kcal": 379,
+      "usda_protein_g": 16.1
+    },
+    {
+      "cuisine": "mexican",
+      "dish": "Frijoles de olla",
+      "usda_food": "Pinto beans, from dried, no added fat",
+      "usda_fdc_id": 2707373,
+      "grams": 180,
+      "grams_basis": "USDA '1 cup'",
+      "usda_kcal": 256,
+      "usda_protein_g": 16.1
+    },
+    {
+      "cuisine": "mexican",
+      "dish": "Huevos rancheros",
+      "usda_food": "Huevos rancheros",
+      "usda_fdc_id": 2707191,
+      "grams": 236,
+      "grams_basis": "USDA 'quantity not specified'",
+      "usda_kcal": 286,
+      "usda_protein_g": 15.8
+    },
+    {
+      "cuisine": "mexican",
+      "dish": "Arroz rojo",
+      "usda_food": "Spanish rice, fat added",
+      "usda_fdc_id": 2709085,
+      "grams": 243,
+      "grams_basis": "USDA '1 cup'",
+      "usda_kcal": 279,
+      "usda_protein_g": 7.0
+    },
+    {
+      "cuisine": "mexican",
+      "dish": "Enchiladas verdes",
+      "usda_food": "Enchilada, chicken",
+      "usda_fdc_id": 2708568,
+      "grams": 450,
+      "grams_basis": "USDA '1 enchilada' 150 g × 3",
+      "usda_kcal": 801,
+      "usda_protein_g": 45.0
+    },
+    {
+      "cuisine": "chinese",
+      "dish": "Kung pao chicken",
+      "usda_food": "Kung pao chicken",
+      "usda_fdc_id": 2706796,
+      "grams": 243,
+      "grams_basis": "1 plate ≈ 1.5 USDA cups",
+      "usda_kcal": 313,
+      "usda_protein_g": 23.7
+    },
+    {
+      "cuisine": "chinese",
+      "dish": "Egg fried rice",
+      "usda_food": "Rice, fried, NFS",
+      "usda_fdc_id": 2708952,
+      "grams": 297,
+      "grams_basis": "1 plate ≈ 1.5 USDA cups",
+      "usda_kcal": 517,
+      "usda_protein_g": 11.4
+    },
+    {
+      "cuisine": "japanese",
+      "dish": "Miso soup",
+      "usda_food": "Soup, miso or tofu",
+      "usda_fdc_id": 2707455,
+      "grams": 245,
+      "grams_basis": "USDA '1 cup'",
+      "usda_kcal": 59,
+      "usda_protein_g": 5.4
+    },
+    {
+      "cuisine": "german",
+      "dish": "Sauerkraut",
+      "usda_food": "Sauerkraut",
+      "usda_fdc_id": 2709982,
+      "grams": 140,
+      "grams_basis": "USDA '1 cup'",
+      "usda_kcal": 56,
+      "usda_protein_g": 1.3
+    },
+    {
+      "cuisine": "british",
+      "dish": "Shepherd's pie",
+      "usda_food": "Shepherd's pie",
+      "usda_fdc_id": 2706594,
+      "grams": 250,
+      "grams_basis": "USDA '1 individual pie'",
+      "usda_kcal": 308,
+      "usda_protein_g": 19.1
+    },
+    {
+      "cuisine": "global",
+      "dish": "Lentil soup",
+      "usda_food": "Soup, lentil",
+      "usda_fdc_id": 2707462,
+      "grams": 300,
+      "grams_basis": "1 bowl ≈ 300 g",
+      "usda_kcal": 180,
+      "usda_protein_g": 11.5
+    }
+  ]
+}
