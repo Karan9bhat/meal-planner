@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { checkPlan, createPlan, getOptions, getTargets } from "./api";
+import { checkPlan, createPlan, getApiBase, getOptions, getTargets } from "./api";
 import { DEFAULT_PROFILE } from "./form";
 import type { Background, Basics, Kitchen, MealSwap, Options, PlanResponse, Profile, Targets, TypicalDay } from "./types";
 
@@ -24,6 +24,7 @@ interface PlanStore {
   setKitchen: (p: Partial<Kitchen>) => void;
   options: Options | null;
   optionsError: string | null;
+  apiBase: string | null;
   targets: Targets | null;
   targetsError: string | null;
   result: PlanResponse | null;
@@ -51,6 +52,7 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
   const [heightUnit, setHeightUnit] = useState<"cm" | "ft">("cm");
   const [options, setOptions] = useState<Options | null>(null);
   const [optionsError, setOptionsError] = useState<string | null>(null);
+  const [apiBase, setApiBase] = useState<string | null>(null);
   const [targets, setTargets] = useState<Targets | null>(null);
   const [targetsError, setTargetsError] = useState<string | null>(null);
   const [result, setResult] = useState<PlanResponse | null>(null);
@@ -84,6 +86,7 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
   }, [profile, result, heightUnit, hydrated]);
 
   useEffect(() => {
+    getApiBase().then(setApiBase);
     getOptions()
       .then(setOptions)
       .catch((e: Error) => setOptionsError(e.message));
@@ -185,6 +188,7 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
       setKitchen,
       options,
       optionsError,
+      apiBase,
       targets,
       targetsError,
       result,
@@ -194,7 +198,7 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
       applySwap,
       reset,
     }),
-    [hydrated, profile, heightUnit, setBasics, setBackground, setDay, setKitchen, options, optionsError, targets, targetsError, result, generating, generateError, generate, applySwap, reset],
+    [hydrated, profile, heightUnit, setBasics, setBackground, setDay, setKitchen, options, optionsError, apiBase, targets, targetsError, result, generating, generateError, generate, applySwap, reset],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

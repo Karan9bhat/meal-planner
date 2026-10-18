@@ -12,8 +12,19 @@ import type {
 } from "./types";
 
 // The browser calls FastAPI directly (plan generation can outlast proxy timeouts).
-// In production set NEXT_PUBLIC_API_URL, and add this site's origin to the backend's CORS_ORIGINS.
-const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/$/, "");
+// Where it lives comes from this site's own /api/config at runtime (BACKEND_URL on the web service), so moving the
+// backend never needs a rebuild. Add this site's origin to the backend's CORS settings.
+let apiBase: Promise<string> | null = null;
+
+export function getApiBase(): Promise<string> {
+  apiBase ??= fetch("/api/config")
+    .then((r) => r.json() as Promise<{ apiUrl: string }>)
+    .then((c) => c.apiUrl)
+    .catch(() => "http://localhost:8000");
+  return apiBase;
+}
+
+const api = async (path: string) => `${await getApiBase()}${path}`;
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
@@ -38,14 +49,15 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 const post = (body: unknown, signal?: AbortSignal): RequestInit => ({ method: "POST", body: JSON.stringify(body), signal });
 
 // ---- FastAPI (deterministic engine + knowledge base + planner) ----
-export const getOptions = () => request<Options>(`${API_URL}/api/options`);
-export const getTargets = (basics: Basics, signal?: AbortSignal) => request<Targets>(`${API_URL}/api/targets`, post(basics, signal));
-export const resolveRegion = (location: string) =>
-  request<RegionResolution>(`${API_URL}/api/region/resolve`, post({ location }));
-export const regionStatus = (key: string) => request<RegionResolution>(`${API_URL}/api/region/${encodeURIComponent(key)}`);
-export const createPlan = (profile: Profile) => request<PlanResponse>(`${API_URL}/api/plan`, post(profile));
-export const checkPlan = (plan: Plan, targets: Targets, daily_budget: number) =>
-  request<DayCheck[]>(`${API_URL}/api/plan/check`, post({ plan, targets, daily_budget }));
+export const getOptions = async () => request<Options>(await api("/api/options"));
+export const getTargets = async (basics: Basics, signal?: AbortSignal) =>
+  request<Targets>(await api("/api/targets"), post(basics, signal));
+export const resolveRegion = async (location: string) =>
+  request<RegionResolution>(await api("/api/region/resolve"), post({ location }));
+export const regionStatus = async (key: string) => request<RegionResolution>(await api(`/api/region/${encodeURIComponent(key)}`));
+export const createPlan = async (profile: Profile) => request<PlanResponse>(await api("/api/plan"), post(profile));
+export const checkPlan = async (plan: Plan, targets: Targets, daily_budget: number) =>
+  request<DayCheck[]>(await api("/api/plan/check"), post({ plan, targets, daily_budget }));
 
 // ---- Next.js agent routes (Mastra) ----
 export const analyzeDay = (body: { description: string; answers?: string; profile: Profile }) =>

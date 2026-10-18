@@ -2,14 +2,14 @@
 # Secrets use `sync: false`: Render asks for their values when you apply the Blueprint; they are never stored here.
 #
 # Each service is served at https://<name>.onrender.com when that name is free on Render; otherwise Render adds a
-# suffix. After the first deploy, check both URLs in the dashboard and update API_URL / CORS_ORIGIN_REGEX below if
-# they differ.
+# suffix. After the first deploy, check both URLs in the dashboard and set BACKEND_URL on the web service to the API's
+# real URL if it differs (CORS already accepts a suffixed web URL).
 #
 # Custom domain later (once kilobite.tech is registered): add to the API service
 #     domains: [api.kilobite.tech]
 # and to the web service
 #     domains: [kilobite.tech, www.kilobite.tech]
-# then point NEXT_PUBLIC_API_URL / BACKEND_URL at https://api.kilobite.tech and redeploy the web service.
+# then set BACKEND_URL on the web service to https://api.kilobite.tech (a restart is enough).
 services:
   # FastAPI: targets, knowledge base, region lookup, planner.
   - type: web
@@ -65,8 +65,7 @@ services:
         sync: false
       - key: SENTRY_ENVIRONMENT
         value: production
-      # Browser -> API (baked in at build time, so redeploy after changing) and agent routes -> API.
-      - key: NEXT_PUBLIC_API_URL
-        value: https://kilobite-planner-api.onrender.com
+      # The API's URL, read at runtime by the browser (via /api/config) and the agent routes. If Render gave the API
+      # a suffix (e.g. kilobite-planner-api-ab12), set it here or in the dashboard; a restart is enough, no rebuild.
       - key: BACKEND_URL
         value: https://kilobite-planner-api.onrender.com

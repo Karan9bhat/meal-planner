@@ -26,7 +26,10 @@ export default function StepPage() {
     return (
       <div className="rounded-2xl border border-chili/30 bg-chili-soft p-6 text-chili">
         <p className="font-semibold">Can&apos;t reach the planner service.</p>
-        <p className="mt-1 text-sm">{store.optionsError}. Is the FastAPI backend running on port 8000?</p>
+        <p className="mt-1 text-sm">
+          {store.optionsError} while calling <code className="font-mono">{store.apiBase ?? "the API"}</code>. Check that the backend
+          service is running and that this site&apos;s BACKEND_URL points to it.
+        </p>
       </div>
     );
   }
