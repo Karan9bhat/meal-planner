@@ -22,11 +22,11 @@ The model behind it runs on free tiers today, so a free tier for individuals and
 🔗 **Live:** https://kilobite-planner-web-lv88.onrender.com
 *(Free Render instance: the first visit after a quiet spell can take ~1 minute to wake up.)*
 
-<!-- TODO: add 3–4 screenshots or a short screen recording:
-     1) "Your food" step resolving a city (e.g. Kraków → Polish, PLN)
-     2) "Your day" step: free text → parsed meals + follow-up questions
-     3) The week plan with the green "added to hit your targets" items
-     4) The chat assistant proposing a swap with the Apply button -->
+![A generated week: 7 days, 16 recipes and one shopping list. Each day shows meal times, portions, macros and cost; the green dashed cards are top-ups added by code to hit the day's targets.](https://raw.githubusercontent.com/Karan9bhat/meal-planner/main/generated-plan.png)
+*A generated week: meals with times, portions, macros and cost per day; green "added to hit your targets" items from the balancer; the day's totals against its targets; and a shopping list of only what's missing from the pantry.*
+
+<!-- Optional extra shots: the "Your food" step resolving a city (e.g. Kraków → Polish, PLN), the "Your day" step parsing free text,
+     and the chat assistant proposing a swap with the Apply button. -->
 
 ## Code
 
@@ -82,11 +82,17 @@ diet / restriction ─EXCLUDES→ tag         allergy ─IS→ tag      tag ─I
 - **The graph grows itself.** 14 cuisines are hand-curated. Any other place is mapped by a fast model in under a second, then **Gemma 4 writes a full cuisine profile in the background** (Polish took 69 s) and saves it to Atlas, so the next person searching Kraków gets it instantly, even after a redeploy.
 - Atlas is reached with **X.509 certificate authentication**. Without it, everything falls back to a local JSON copy with identical rules, and the tests check the two agree exactly.
 
+![MongoDB Atlas: Cluster0 on the free tier, AWS Mumbai, 3-node replica set](https://raw.githubusercontent.com/Karan9bhat/meal-planner/main/mongo-db.png)
+*The knowledge graph runs on a free Atlas cluster (AWS Mumbai, 3-node replica set).*
+
 ### Seeing what the agents do: Sentry
 
 - **Backend:** every plan is an `invoke_agent planner` trace, with each model call (model, latency, tokens) and the draft, variety and balance steps nested inside.
 - **Agents:** Mastra's Sentry exporter sends traces for the intake, pantry and chat agents and their tool calls.
 - **Privacy:** prompt and answer text is redacted before it leaves the server. Traces show the shape of a run, never what a user typed.
+
+![Sentry AI Agents Overview for meal-planner: agent runs, estimated cost, duration, LLM calls and tokens by model](https://raw.githubusercontent.com/Karan9bhat/meal-planner/main/sentry.png)
+*Sentry's AI Agents dashboard for a test session: agent runs, estimated cost, duration, and calls and tokens per model. gpt-oss-120b made 6 calls (20,403 tokens), Qwen 3.8 27B 3 calls (1,247 tokens), and the gpt-oss-safeguard-20b guardrail 1 call (454 tokens), for a total estimated cost of under one US cent.*
 
 ### Tested against real-world data
 
@@ -101,6 +107,9 @@ diet / restriction ─EXCLUDES→ tag         allergy ─IS→ tag      tag ─I
 ### Deployment
 
 Two **Render** services from one Blueprint: FastAPI, and Next.js with the Mastra agents. The browser reads the API address at runtime, so moving the backend never needs a rebuild.
+
+![Render: kilobite-planner-web (Node) and kilobite-planner-api (Python 3), both deployed in Singapore](https://raw.githubusercontent.com/Karan9bhat/meal-planner/main/render.png)
+*Both services live on Render's free tier in Singapore: the Next.js web app with the agents, and the Python API.*
 
 ### What went wrong (and what it taught me)
 
@@ -120,14 +129,9 @@ Two **Render** services from one Blueprint: FastAPI, and Next.js with the Mastra
 
 ## My Agent Session
 
-<!-- TODO: save this build session with DevRelay and embed it with the agent_session tag from the challenge page,
-     or link to it here. It covers the whole build: the plan, every bug, the evals and the deploy debugging. -->
+The whole build, with Claude Code: from "diet apps ignore what's in your kitchen" to a deployed multi-agent app. It includes every wrong turn: a model retired mid-build, Gemma thinking itself into a 3-minute loop, the same 9 dishes on repeat, and the Render deploy debugging. API keys, connection strings and private paths were scrubbed before saving.
 
-## My First User
-
-<!-- TODO (bonus points): who tried it? e.g. "My flatmate, a vegetarian student in Pune on ₹150/day…"
-     What did they say, would they pay, and what did they ask for next?
-     If nobody has used it yet, delete this section. -->
+{% agent_session 1028 %}
 
 ## Prize Categories
 
