@@ -1,4 +1,5 @@
 import logging
+import os
 import threading
 from contextlib import asynccontextmanager
 
@@ -51,6 +52,17 @@ app.add_middleware(
 @app.exception_handler(LLMError)
 async def llm_error_handler(_, exc: LLMError):
     return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
+
+
+@app.api_route("/", methods=["GET", "HEAD"])
+def root():
+    """This is the API, not the website; say so instead of a bare 404 (also answers Render's HEAD / probe)."""
+    return {
+        "service": "meal-planner API",
+        "website": os.getenv("PUBLIC_APP_URL", "https://kilobite-planner-web.onrender.com"),
+        "health": "/api/health",
+        "docs": "/docs",
+    }
 
 
 @app.get("/api/health")
